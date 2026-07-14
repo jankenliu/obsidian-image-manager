@@ -1,10 +1,24 @@
 import { requestUrl } from 'obsidian';
 import { UploaderBase } from './uploader-base';
 import { encodePublicPath, joinPublicUrl, normalizePublicUrlBase } from './public-url';
-import type { UploadResult, ImageHostingConfig, QiniuConfig, UploadContext } from '../types';
+import { getObjectName } from './object-list';
+import type { HostedImage, UploadResult, ImageHostingConfig, QiniuConfig, UploadContext } from '../types';
+
+interface QiniuListItem {
+    key?: string;
+    fsize?: number;
+    putTime?: number;
+}
+
+interface QiniuListResponse {
+    marker?: string;
+    items?: QiniuListItem[];
+    error?: string;
+}
 
 export class QiniuUploader extends UploaderBase {
     readonly name = 'Qiniu';
+    readonly supportsListing = true;
 
     constructor(config: ImageHostingConfig, globalUploadPathTemplate?: string) {
         super(config, globalUploadPathTemplate);
@@ -87,6 +101,53 @@ export class QiniuUploader extends UploaderBase {
         }
     }
 
+    async listImages(): Promise<HostedImage[]> {
+        const qiniuConfig = this.config.config as QiniuConfig;
+        const publicUrlBase = normalizePublicUrlBase(this.config.urlPrefix);
+        if (!publicUrlBase) {
+            throw new Error('Public access URL base is required for Qiniu');
+        }
+
+        const images: HostedImage[] = [];
+        let marker = '';
+
+        do {
+            const queryParams = new URLSearchParams({
+                bucket: qiniuConfig.bucket.trim(),
+                limit: '1000',
+            });
+            if (marker) queryParams.set('marker', marker);
+            const url = `https://rsf.qbox.me/list?${queryParams.toString()}`;
+            const authorization = await this.generateManagementAuthorization(qiniuConfig, url);
+            const resp = await requestUrl({
+                url,
+                method: 'GET',
+                headers: { Authorization: authorization },
+                throw: false,
+            });
+
+            if (resp.status >= 400) {
+                throw new Error(`HTTP ${resp.status}: ${resp.text}`);
+            }
+
+            const page = resp.json as QiniuListResponse;
+            if (page.error) throw new Error(page.error);
+            for (const item of page.items ?? []) {
+                if (!item.key) continue;
+                images.push({
+                    key: item.key,
+                    name: getObjectName(item.key),
+                    url: joinPublicUrl(publicUrlBase, encodePublicPath(item.key)),
+                    size: item.fsize ?? 0,
+                    modified: item.putTime ? Math.floor(item.putTime / 10000) : 0,
+                });
+            }
+            marker = page.marker ?? '';
+        } while (marker);
+
+        return images;
+    }
+
     private async generateUploadToken(config: QiniuConfig, key: string): Promise<string> {
         const accessKey = config.accessKey.trim();
         const secretKey = config.secretKey.trim();
@@ -103,6 +164,13 @@ export class QiniuUploader extends UploaderBase {
         const token = `${accessKey}:${encodedSign}:${encodedPolicy}`;
 
         return token;
+    }
+
+    private async generateManagementAuthorization(config: QiniuConfig, url: string): Promise<string> {
+        const requestUrl = new URL(url);
+        const signingData = `${requestUrl.pathname}${requestUrl.search}\n`;
+        const sign = await this.hmacSha1(config.secretKey.trim(), signingData);
+        return `QBox ${config.accessKey.trim()}:${this.base64UrlEncode(new Uint8Array(sign))}`;
     }
 
     private base64UrlEncode(input: string | Uint8Array): string {

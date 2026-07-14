@@ -99,6 +99,15 @@ export const en: Record<string, string> = {
     'modal.imageBrowser.insertTooltip': 'Click to preview',
     'modal.imageBrowser.orphanFilter': 'Orphan',
     'modal.imageBrowser.orphanScanning': 'Scanning for orphan images...',
+    'modal.imageBrowser.local': 'Local',
+    'modal.imageBrowser.hosting': 'Hosting',
+    'modal.imageBrowser.hostingSelect': 'Image hosting provider',
+    'modal.imageBrowser.loadingHosting': 'Loading images from hosting...',
+    'modal.imageBrowser.noHosting': 'No enabled image hosting provider is configured.',
+    'modal.imageBrowser.noHostedImages': 'No images found in this hosting provider.',
+    'modal.imageBrowser.listUnsupported': 'This hosting provider does not support image browsing.',
+    'modal.imageBrowser.loadFailed': 'Failed to load hosted images: {error}',
+    'modal.imageBrowser.unknownError': 'Unknown error',
 
     // Image Preview Modal
     'modal.preview.path': 'Path: ',

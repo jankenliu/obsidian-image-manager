@@ -98,6 +98,15 @@ export const zh: Record<string, string> = {
     'modal.imageBrowser.insertTooltip': '点击预览',
     'modal.imageBrowser.orphanFilter': '孤立图片',
     'modal.imageBrowser.orphanScanning': '正在扫描孤立图片...',
+    'modal.imageBrowser.local': '本地',
+    'modal.imageBrowser.hosting': '图床',
+    'modal.imageBrowser.hostingSelect': '图床服务商',
+    'modal.imageBrowser.loadingHosting': '正在加载图床图片...',
+    'modal.imageBrowser.noHosting': '未配置已启用的图床。',
+    'modal.imageBrowser.noHostedImages': '该图床中未找到图片。',
+    'modal.imageBrowser.listUnsupported': '该图床不支持图片浏览。',
+    'modal.imageBrowser.loadFailed': '加载图床图片失败：{error}',
+    'modal.imageBrowser.unknownError': '未知错误',
 
     // 图片预览
     'modal.preview.path': '路径：',

@@ -152,6 +152,59 @@ describe('AliyunOSSUploader', () => {
         expect(authorization).not.toMatch(/^OSS /);
     });
 
+    it('lists hosted objects across pages and builds public URLs', async () => {
+        requestUrl
+            .mockResolvedValueOnce({
+                status: 200,
+                text: `
+                    <ListBucketResult>
+                        <IsTruncated>true</IsTruncated>
+                        <NextContinuationToken>next/page</NextContinuationToken>
+                        <Contents>
+                            <Key>uploads/中文 图.png</Key>
+                            <LastModified>2026-07-15T01:02:03.000Z</LastModified>
+                            <Size>2048</Size>
+                        </Contents>
+                    </ListBucketResult>
+                `,
+            })
+            .mockResolvedValueOnce({
+                status: 200,
+                text: `
+                    <ListBucketResult>
+                        <IsTruncated>false</IsTruncated>
+                        <Contents>
+                            <Key>uploads/second.jpg</Key>
+                            <LastModified>2026-07-15T02:00:00.000Z</LastModified>
+                            <Size>4096</Size>
+                        </Contents>
+                    </ListBucketResult>
+                `,
+            });
+        const uploader = new AliyunOSSUploader(
+            createHostingConfig('https://cdn.example.com/root')
+        );
+
+        const images = await uploader.listImages();
+
+        expect(requestUrl).toHaveBeenNthCalledWith(1, expect.objectContaining({
+            url: 'https://images.oss-cn-hangzhou.aliyuncs.com/?list-type=2&max-keys=1000',
+            method: 'GET',
+        }));
+        expect(requestUrl).toHaveBeenNthCalledWith(2, expect.objectContaining({
+            url: 'https://images.oss-cn-hangzhou.aliyuncs.com/?continuation-token=next%2Fpage&list-type=2&max-keys=1000',
+        }));
+        expect(images).toEqual([
+            expect.objectContaining({
+                key: 'uploads/中文 图.png',
+                name: '中文 图.png',
+                size: 2048,
+                url: 'https://cdn.example.com/root/uploads/%E4%B8%AD%E6%96%87%20%E5%9B%BE.png',
+            }),
+            expect.objectContaining({ key: 'uploads/second.jpg', size: 4096 }),
+        ]);
+    });
+
     it('matches the canonical request hash returned by OSS for a real PUT request', async () => {
         const canonicalRequest = [
             'PUT',

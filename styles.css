@@ -1,10 +1,41 @@
 /* Image Browser Modal */
 .image-browser-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     margin-bottom: 12px;
 }
 
 .image-browser-title {
-    margin: 0 0 12px 0;
+    margin: 0;
+}
+
+.image-browser-source-switch {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    background-color: var(--background-secondary);
+}
+
+.image-browser-source-btn {
+    min-width: 56px;
+    padding: 4px 10px;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    font-size: 0.85em;
+}
+
+.image-browser-source-btn.is-active {
+    color: var(--text-on-accent);
+    background-color: var(--interactive-accent);
+}
+
+.image-browser-hidden {
+    display: none;
 }
 
 .image-browser-controls {
@@ -21,6 +52,11 @@
 
 .image-browser-sort {
     flex-shrink: 0;
+}
+
+.image-browser-hosting-select {
+    flex-shrink: 0;
+    max-width: 180px;
 }
 
 .image-browser-count {

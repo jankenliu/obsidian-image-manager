@@ -2,10 +2,18 @@ import { requestUrl } from 'obsidian';
 import { UploaderBase } from './uploader-base';
 import { encodeOSSKey } from './oss-path';
 import { joinPublicUrl } from './public-url';
-import type { UploadResult, ImageHostingConfig, AliyunOSSConfig, UploadContext } from '../types';
+import { buildCanonicalQuery, getObjectName, parseObjectListXml } from './object-list';
+import type {
+    HostedImage,
+    UploadResult,
+    ImageHostingConfig,
+    AliyunOSSConfig,
+    UploadContext,
+} from '../types';
 
 export class AliyunOSSUploader extends UploaderBase {
     readonly name = 'Aliyun OSS';
+    readonly supportsListing = true;
 
     constructor(config: ImageHostingConfig, globalUploadPathTemplate?: string) {
         super(config, globalUploadPathTemplate);
@@ -73,6 +81,48 @@ export class AliyunOSSUploader extends UploaderBase {
         }
     }
 
+    async listImages(): Promise<HostedImage[]> {
+        const ossConfig = this.config.config as AliyunOSSConfig;
+        const region = this.parseRegion(ossConfig.region);
+        const host = `${ossConfig.bucket}.oss-${region}.aliyuncs.com`;
+        const images: HostedImage[] = [];
+        let continuationToken = '';
+
+        do {
+            const queryParams: Array<[string, string]> = [
+                ['list-type', '2'],
+                ['max-keys', '1000'],
+            ];
+            if (continuationToken) queryParams.push(['continuation-token', continuationToken]);
+            const canonicalQuery = buildCanonicalQuery(queryParams);
+            const headers = await this.signRequest(ossConfig, 'GET', '', undefined, canonicalQuery);
+            const resp = await requestUrl({
+                url: `https://${host}/?${canonicalQuery}`,
+                method: 'GET',
+                headers,
+                throw: false,
+            });
+
+            if (resp.status >= 400) {
+                throw new Error(`HTTP ${resp.status}: ${resp.text}`);
+            }
+
+            const page = parseObjectListXml(resp.text);
+            images.push(...page.objects.map((object) => ({
+                key: object.key,
+                name: getObjectName(object.key),
+                url: this.config.urlPrefix
+                    ? joinPublicUrl(this.config.urlPrefix, encodeOSSKey(object.key))
+                    : `https://${host}/${encodeOSSKey(object.key)}`,
+                size: object.size,
+                modified: object.modified,
+            })));
+            continuationToken = page.isTruncated ? page.nextToken : '';
+        } while (continuationToken);
+
+        return images;
+    }
+
     private parseRegion(region: string): string {
         let r = region.trim();
         if (r.includes('.aliyuncs.com')) r = r.replace('.aliyuncs.com', '');
@@ -84,7 +134,8 @@ export class AliyunOSSUploader extends UploaderBase {
         config: AliyunOSSConfig,
         method: string,
         objectKey: string,
-        contentType?: string
+        contentType?: string,
+        canonicalQuery = ''
     ): Promise<Record<string, string>> {
         const timestamp = this.formatTimestamp(new Date());
         const dateStamp = timestamp.slice(0, 8);
@@ -98,7 +149,7 @@ export class AliyunOSSUploader extends UploaderBase {
             `x-oss-date:${timestamp}`,
         ].join('\n') + '\n';
         const additionalHeaders = '';
-        const canonicalRequest = `${method}\n${canonicalUri}\n\n${canonicalHeaders}${additionalHeaders}\n\nUNSIGNED-PAYLOAD`;
+        const canonicalRequest = `${method}\n${canonicalUri}\n${canonicalQuery}\n${canonicalHeaders}${additionalHeaders}\n\nUNSIGNED-PAYLOAD`;
         const credentialScope = `${dateStamp}/${region}/oss/aliyun_v4_request`;
         const stringToSign = [
             'OSS4-HMAC-SHA256',

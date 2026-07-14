@@ -64,4 +64,36 @@ describe('QiniuUploader', () => {
         });
         expect(requestUrl).not.toHaveBeenCalled();
     });
+
+    it('lists hosted objects with QBox authorization and public URLs', async () => {
+        requestUrl.mockResolvedValue({
+            status: 200,
+            json: {
+                marker: '',
+                items: [{
+                    key: 'uploads/中文 图.png',
+                    fsize: 2048,
+                    putTime: 17_840_217_404_690_000,
+                }],
+            },
+            text: '',
+        });
+        const uploader = new QiniuUploader(createHostingConfig());
+
+        const images = await uploader.listImages();
+
+        expect(requestUrl).toHaveBeenCalledWith(expect.objectContaining({
+            url: 'https://rsf.qbox.me/list?bucket=images&limit=1000',
+            method: 'GET',
+            headers: {
+                Authorization: expect.stringMatching(/^QBox access-key:/),
+            },
+        }));
+        expect(images).toEqual([expect.objectContaining({
+            key: 'uploads/中文 图.png',
+            name: '中文 图.png',
+            size: 2048,
+            url: 'https://cdn.example.com/bucket/uploads/%E4%B8%AD%E6%96%87%20%E5%9B%BE.png',
+        })]);
+    });
 });

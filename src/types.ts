@@ -90,6 +90,15 @@ export interface UploadResult {
     originalPath: string;
 }
 
+/** 图床中的远端图片信息 */
+export interface HostedImage {
+    key: string;
+    name: string;
+    url: string;
+    size: number;
+    modified: number;
+}
+
 /** 迁移记录 */
 export interface MigrationRecord {
     timestamp: number;

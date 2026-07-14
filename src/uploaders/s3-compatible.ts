@@ -2,10 +2,12 @@ import { requestUrl } from 'obsidian';
 import { UploaderBase } from './uploader-base';
 import { buildS3CanonicalUri, buildS3Url, encodeS3Key } from './s3-path';
 import { joinPublicUrl } from './public-url';
-import type { UploadResult, ImageHostingConfig, S3Config, UploadContext } from '../types';
+import { buildCanonicalQuery, getObjectName, parseObjectListXml } from './object-list';
+import type { HostedImage, UploadResult, ImageHostingConfig, S3Config, UploadContext } from '../types';
 
 export class S3Uploader extends UploaderBase {
     readonly name = 'S3 Compatible';
+    readonly supportsListing = true;
 
     constructor(config: ImageHostingConfig, globalUploadPathTemplate?: string) {
         super(config, globalUploadPathTemplate);
@@ -81,13 +83,65 @@ export class S3Uploader extends UploaderBase {
         }
     }
 
+    async listImages(): Promise<HostedImage[]> {
+        const s3Config = this.config.config as S3Config;
+        const images: HostedImage[] = [];
+        let continuationToken = '';
+
+        do {
+            const queryParams: Array<[string, string]> = [
+                ['list-type', '2'],
+                ['max-keys', '1000'],
+            ];
+            if (continuationToken) queryParams.push(['continuation-token', continuationToken]);
+            const canonicalQuery = buildCanonicalQuery(queryParams);
+            const baseUrl = buildS3Url(s3Config, '');
+            const requestHost = new URL(baseUrl).host;
+            const contentType = 'application/octet-stream';
+            const headers = await this.signRequest(
+                s3Config,
+                'GET',
+                '',
+                requestHost,
+                new ArrayBuffer(0),
+                contentType,
+                canonicalQuery
+            );
+            const resp = await requestUrl({
+                url: `${baseUrl}?${canonicalQuery}`,
+                method: 'GET',
+                headers: { ...headers, 'Content-Type': contentType },
+                throw: false,
+            });
+
+            if (resp.status >= 400) {
+                throw new Error(`HTTP ${resp.status}: ${resp.text}`);
+            }
+
+            const page = parseObjectListXml(resp.text);
+            images.push(...page.objects.map((object) => ({
+                key: object.key,
+                name: getObjectName(object.key),
+                url: this.config.urlPrefix
+                    ? joinPublicUrl(this.config.urlPrefix, encodeS3Key(object.key))
+                    : buildS3Url(s3Config, object.key),
+                size: object.size,
+                modified: object.modified,
+            })));
+            continuationToken = page.isTruncated ? page.nextToken : '';
+        } while (continuationToken);
+
+        return images;
+    }
+
     private async signRequest(
         s3Config: S3Config,
         method: string,
         key: string,
         requestHost: string,
         body: ArrayBuffer,
-        contentType = 'application/octet-stream'
+        contentType = 'application/octet-stream',
+        canonicalQuery = ''
     ): Promise<Record<string, string>> {
         const now = new Date();
         const amzDate = this.formatAmzDate(now);
@@ -101,7 +155,7 @@ export class S3Uploader extends UploaderBase {
         const canonicalRequest = [
             method,
             canonicalUri,
-            '', // query string
+            canonicalQuery,
             canonicalHeaders,
             signedHeaders,
             payloadHash,

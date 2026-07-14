@@ -130,4 +130,39 @@ describe('S3Uploader', () => {
             'https://minio.example.com:9000/images/global/Projects/A/%E5%9B%BE%201.png'
         );
     });
+
+    it('lists hosted objects using a signed ListObjectsV2 request', async () => {
+        requestUrl.mockResolvedValue({
+            status: 200,
+            text: `
+                <ListBucketResult>
+                    <IsTruncated>false</IsTruncated>
+                    <Contents>
+                        <Key>uploads/中文 图.png</Key>
+                        <LastModified>2026-07-15T01:02:03.000Z</LastModified>
+                        <Size>2048</Size>
+                    </Contents>
+                </ListBucketResult>
+            `,
+        });
+        const uploader = new S3Uploader(
+            createHostingConfig(createS3Config(), 'https://cdn.example.com/root')
+        );
+
+        const images = await uploader.listImages();
+
+        expect(requestUrl).toHaveBeenCalledWith(expect.objectContaining({
+            url: 'https://minio.example.com:9000/images/?list-type=2&max-keys=1000',
+            method: 'GET',
+            headers: expect.objectContaining({
+                Authorization: expect.stringMatching(/^AWS4-HMAC-SHA256 /),
+            }),
+        }));
+        expect(images).toEqual([expect.objectContaining({
+            key: 'uploads/中文 图.png',
+            name: '中文 图.png',
+            size: 2048,
+            url: 'https://cdn.example.com/root/uploads/%E4%B8%AD%E6%96%87%20%E5%9B%BE.png',
+        })]);
+    });
 });

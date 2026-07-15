@@ -205,6 +205,24 @@ describe('AliyunOSSUploader', () => {
         ]);
     });
 
+    it('deletes an object with its encoded key and OSS V4 authorization', async () => {
+        requestUrl.mockResolvedValue({ status: 204, text: '' });
+        const uploader = new AliyunOSSUploader(createHostingConfig());
+
+        await uploader.deleteImage('uploads/中文 图.png');
+
+        const request = requestUrl.mock.calls[0]?.[0] as {
+            url: string;
+            method: string;
+            headers: Record<string, string>;
+        };
+        expect(request).toMatchObject({
+            url: 'https://images.oss-cn-hangzhou.aliyuncs.com/uploads/%E4%B8%AD%E6%96%87%20%E5%9B%BE.png',
+            method: 'DELETE',
+        });
+        expect(request.headers.Authorization).toMatch(/^OSS4-HMAC-SHA256 /);
+    });
+
     it('matches the canonical request hash returned by OSS for a real PUT request', async () => {
         const canonicalRequest = [
             'PUT',

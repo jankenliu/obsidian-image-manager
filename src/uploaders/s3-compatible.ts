@@ -8,6 +8,7 @@ import type { HostedImage, UploadResult, ImageHostingConfig, S3Config, UploadCon
 export class S3Uploader extends UploaderBase {
     readonly name = 'S3 Compatible';
     readonly supportsListing = true;
+    readonly supportsDeletion = true;
 
     constructor(config: ImageHostingConfig, globalUploadPathTemplate?: string) {
         super(config, globalUploadPathTemplate);
@@ -132,6 +133,31 @@ export class S3Uploader extends UploaderBase {
         } while (continuationToken);
 
         return images;
+    }
+
+    async deleteImage(key: string): Promise<void> {
+        const s3Config = this.config.config as S3Config;
+        const url = buildS3Url(s3Config, key);
+        const requestHost = new URL(url).host;
+        const contentType = 'application/octet-stream';
+        const headers = await this.signRequest(
+            s3Config,
+            'DELETE',
+            key,
+            requestHost,
+            new ArrayBuffer(0),
+            contentType
+        );
+        const resp = await requestUrl({
+            url,
+            method: 'DELETE',
+            headers: { ...headers, 'Content-Type': contentType },
+            throw: false,
+        });
+
+        if (resp.status >= 400) {
+            throw new Error(`HTTP ${resp.status}: ${resp.text}`);
+        }
     }
 
     private async signRequest(

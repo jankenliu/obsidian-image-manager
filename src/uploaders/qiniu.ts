@@ -19,6 +19,7 @@ interface QiniuListResponse {
 export class QiniuUploader extends UploaderBase {
     readonly name = 'Qiniu';
     readonly supportsListing = true;
+    readonly supportsDeletion = true;
 
     constructor(config: ImageHostingConfig, globalUploadPathTemplate?: string) {
         super(config, globalUploadPathTemplate);
@@ -146,6 +147,23 @@ export class QiniuUploader extends UploaderBase {
         } while (marker);
 
         return images;
+    }
+
+    async deleteImage(key: string): Promise<void> {
+        const qiniuConfig = this.config.config as QiniuConfig;
+        const entry = this.base64UrlEncode(`${qiniuConfig.bucket.trim()}:${key}`);
+        const url = `https://rs.qbox.me/delete/${entry}`;
+        const authorization = await this.generateManagementAuthorization(qiniuConfig, url);
+        const resp = await requestUrl({
+            url,
+            method: 'POST',
+            headers: { Authorization: authorization },
+            throw: false,
+        });
+
+        if (resp.status >= 400) {
+            throw new Error(`HTTP ${resp.status}: ${resp.text}`);
+        }
     }
 
     private async generateUploadToken(config: QiniuConfig, key: string): Promise<string> {

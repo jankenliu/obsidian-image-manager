@@ -151,18 +151,39 @@ describe('S3Uploader', () => {
 
         const images = await uploader.listImages();
 
-        expect(requestUrl).toHaveBeenCalledWith(expect.objectContaining({
+        const request = requestUrl.mock.calls[0]?.[0] as {
+            url: string;
+            method: string;
+            headers: Record<string, string>;
+        };
+        expect(request).toMatchObject({
             url: 'https://minio.example.com:9000/images/?list-type=2&max-keys=1000',
             method: 'GET',
-            headers: expect.objectContaining({
-                Authorization: expect.stringMatching(/^AWS4-HMAC-SHA256 /),
-            }),
-        }));
+        });
+        expect(request.headers.Authorization).toMatch(/^AWS4-HMAC-SHA256 /);
         expect(images).toEqual([expect.objectContaining({
             key: 'uploads/中文 图.png',
             name: '中文 图.png',
             size: 2048,
             url: 'https://cdn.example.com/root/uploads/%E4%B8%AD%E6%96%87%20%E5%9B%BE.png',
         })]);
+    });
+
+    it('deletes an object with an encoded URL and AWS signature', async () => {
+        requestUrl.mockResolvedValue({ status: 204, text: '' });
+        const uploader = new S3Uploader(createHostingConfig(createS3Config()));
+
+        await uploader.deleteImage('uploads/中文 图.png');
+
+        const request = requestUrl.mock.calls[0]?.[0] as {
+            url: string;
+            method: string;
+            headers: Record<string, string>;
+        };
+        expect(request).toMatchObject({
+            url: 'https://minio.example.com:9000/images/uploads/%E4%B8%AD%E6%96%87%20%E5%9B%BE.png',
+            method: 'DELETE',
+        });
+        expect(request.headers.Authorization).toMatch(/^AWS4-HMAC-SHA256 /);
     });
 });

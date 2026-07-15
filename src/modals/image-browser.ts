@@ -3,6 +3,7 @@ import type ImageManagerPlugin from '../main';
 import type { HostedImage, ImageHostingConfig } from '../types';
 import { ImageScanner } from '../utils/image-scanner';
 import { OrphanFinder } from '../utils/orphan-finder';
+import { findOrphanHostedImages } from '../utils/hosted-orphan-finder';
 import { formatFileSize } from '../utils/path-utils';
 import { createUploader } from '../uploaders/uploader-factory';
 import { t } from '../i18n';
@@ -20,6 +21,7 @@ export class ImageBrowserModal extends Modal {
     private hostedImages: HostedImage[] = [];
     private filteredHostedImages: HostedImage[] = [];
     private orphanPaths: Set<string> | null = null;
+    private hostedOrphanKeys: Set<string> | null = null;
     private gridEl: HTMLDivElement | null = null;
     private countEl: HTMLSpanElement | null = null;
     private searchInput: HTMLInputElement | null = null;
@@ -29,7 +31,8 @@ export class ImageBrowserModal extends Modal {
     private localBtn: HTMLButtonElement | null = null;
     private hostingBtn: HTMLButtonElement | null = null;
     private source: BrowserSource = 'local';
-    private showOrphansOnly = false;
+    private showLocalOrphansOnly = false;
+    private showHostedOrphansOnly = false;
     private debounceTimer: number | null = null;
     private loadSequence = 0;
     private loadingHosting = false;
@@ -132,7 +135,7 @@ export class ImageBrowserModal extends Modal {
         this.localBtn?.toggleClass('is-active', source === 'local');
         this.hostingBtn?.toggleClass('is-active', source === 'hosting');
         this.hostingSelect?.toggleClass('image-browser-hidden', source !== 'hosting');
-        this.orphanBtn?.toggleClass('image-browser-hidden', source !== 'local');
+        this.updateOrphanButton();
         this.sortSelect?.querySelector<HTMLOptionElement>('option[value="created"]')
             ?.toggleClass('image-browser-hidden', source === 'hosting');
 
@@ -157,6 +160,7 @@ export class ImageBrowserModal extends Modal {
             (item) => item.id === this.hostingSelect?.value
         );
         this.hostedImages = [];
+        this.hostedOrphanKeys = null;
         this.hostingError = '';
 
         if (!config) {
@@ -175,11 +179,17 @@ export class ImageBrowserModal extends Modal {
         }
 
         this.loadingHosting = true;
+        this.updateOrphanButton();
         this.applyFilterAndSort();
         try {
             const images = await uploader.listImages();
             if (requestSequence !== this.loadSequence || this.source !== 'hosting') return;
             this.hostedImages = images.filter((image) => this.isSupportedImage(image.name));
+            if (this.showHostedOrphansOnly) {
+                const orphans = await findOrphanHostedImages(this.app, this.hostedImages);
+                if (requestSequence !== this.loadSequence || this.source !== 'hosting') return;
+                this.hostedOrphanKeys = new Set(orphans.map((image) => image.key));
+            }
         } catch (error) {
             if (requestSequence !== this.loadSequence || this.source !== 'hosting') return;
             this.hostingError = t('modal.imageBrowser.loadFailed', {
@@ -188,6 +198,7 @@ export class ImageBrowserModal extends Modal {
         } finally {
             if (requestSequence === this.loadSequence && this.source === 'hosting') {
                 this.loadingHosting = false;
+                this.updateOrphanButton();
                 this.applyFilterAndSort();
             }
         }
@@ -204,10 +215,15 @@ export class ImageBrowserModal extends Modal {
     }
 
     private async toggleOrphanFilter() {
-        this.showOrphansOnly = !this.showOrphansOnly;
-        this.orphanBtn?.toggleClass('is-active', this.showOrphansOnly);
+        if (this.source === 'hosting') {
+            await this.toggleHostedOrphanFilter();
+            return;
+        }
 
-        if (this.showOrphansOnly) {
+        this.showLocalOrphansOnly = !this.showLocalOrphansOnly;
+        this.updateOrphanButton();
+
+        if (this.showLocalOrphansOnly) {
             new Notice(t('modal.imageBrowser.orphanScanning'));
             const finder = new OrphanFinder(this.app, this.plugin.settings.supportedExtensions);
             const result = await finder.findOrphans();
@@ -219,6 +235,29 @@ export class ImageBrowserModal extends Modal {
         this.applyFilterAndSort();
     }
 
+    private async toggleHostedOrphanFilter() {
+        this.showHostedOrphansOnly = !this.showHostedOrphansOnly;
+        this.updateOrphanButton();
+        if (this.showHostedOrphansOnly) {
+            new Notice(t('modal.imageBrowser.hostedOrphanScanning'));
+            const orphans = await findOrphanHostedImages(this.app, this.hostedImages);
+            if (this.source !== 'hosting' || !this.showHostedOrphansOnly) return;
+            this.hostedOrphanKeys = new Set(orphans.map((image) => image.key));
+        } else {
+            this.hostedOrphanKeys = null;
+        }
+        this.applyFilterAndSort();
+    }
+
+    private updateOrphanButton() {
+        if (!this.orphanBtn) return;
+        const isActive = this.source === 'local'
+            ? this.showLocalOrphansOnly
+            : this.showHostedOrphansOnly;
+        this.orphanBtn.toggleClass('is-active', isActive);
+        this.orphanBtn.disabled = this.source === 'hosting' && this.loadingHosting;
+    }
+
     private applyFilterAndSort() {
         if (this.source === 'hosting') {
             this.applyHostedFilterAndSort();
@@ -227,7 +266,7 @@ export class ImageBrowserModal extends Modal {
 
         const keyword = this.searchInput?.value ?? '';
         let images = this.scanner.filterImages(this.allImages, { keyword });
-        if (this.showOrphansOnly && this.orphanPaths) {
+        if (this.showLocalOrphansOnly && this.orphanPaths) {
             images = images.filter((file) => this.orphanPaths!.has(file.path));
         }
 
@@ -239,7 +278,8 @@ export class ImageBrowserModal extends Modal {
     private applyHostedFilterAndSort() {
         const keyword = (this.searchInput?.value ?? '').trim().toLowerCase();
         this.filteredHostedImages = this.hostedImages.filter((image) =>
-            !keyword || image.key.toLowerCase().includes(keyword)
+            (!keyword || image.key.toLowerCase().includes(keyword))
+            && (!this.showHostedOrphansOnly || this.hostedOrphanKeys?.has(image.key))
         );
         const sortBy = (this.sortSelect?.value ?? 'name') as BrowserSort;
         this.filteredHostedImages.sort((left, right) => {
@@ -294,10 +334,16 @@ export class ImageBrowserModal extends Modal {
             return;
         }
         if (this.filteredHostedImages.length === 0) {
-            this.renderEmpty(t('modal.imageBrowser.noHostedImages'));
+            this.renderEmpty(this.showHostedOrphansOnly
+                ? t('modal.imageBrowser.noHostedOrphans')
+                : t('modal.imageBrowser.noHostedImages'));
             return;
         }
 
+        const config = this.getSelectedHostingConfig();
+        const uploader = config
+            ? createUploader(config, this.plugin.settings.uploadPathTemplate)
+            : null;
         for (const image of this.filteredHostedImages) {
             const card = this.createCard(image.name, image.key, image.size);
             const img = card.imageContainer.createEl('img', { attr: { src: image.url } });
@@ -305,9 +351,29 @@ export class ImageBrowserModal extends Modal {
             img.setAttribute('width', thumbSize);
             img.setAttribute('height', thumbSize);
             card.cardEl.addEventListener('click', () => {
-                new HostedImagePreviewModal(this.app, image).open();
+                new HostedImagePreviewModal(
+                    this.app,
+                    image,
+                    uploader?.supportsDeletion && config
+                        ? () => this.deleteHostedImage(image, config)
+                        : undefined
+                ).open();
             });
         }
+    }
+
+    private getSelectedHostingConfig(): ImageHostingConfig | null {
+        return this.getEnabledHostingConfigs().find(
+            (config) => config.id === this.hostingSelect?.value
+        ) ?? null;
+    }
+
+    private async deleteHostedImage(image: HostedImage, config: ImageHostingConfig) {
+        const uploader = createUploader(config, this.plugin.settings.uploadPathTemplate);
+        await uploader.deleteImage(image.key);
+        this.hostedImages = this.hostedImages.filter((item) => item.key !== image.key);
+        this.hostedOrphanKeys?.delete(image.key);
+        this.applyFilterAndSort();
     }
 
     private createCard(name: string, path: string, size: number): {

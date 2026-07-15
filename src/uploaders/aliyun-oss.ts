@@ -14,6 +14,7 @@ import type {
 export class AliyunOSSUploader extends UploaderBase {
     readonly name = 'Aliyun OSS';
     readonly supportsListing = true;
+    readonly supportsDeletion = true;
 
     constructor(config: ImageHostingConfig, globalUploadPathTemplate?: string) {
         super(config, globalUploadPathTemplate);
@@ -121,6 +122,23 @@ export class AliyunOSSUploader extends UploaderBase {
         } while (continuationToken);
 
         return images;
+    }
+
+    async deleteImage(key: string): Promise<void> {
+        const ossConfig = this.config.config as AliyunOSSConfig;
+        const region = this.parseRegion(ossConfig.region);
+        const host = `${ossConfig.bucket}.oss-${region}.aliyuncs.com`;
+        const headers = await this.signRequest(ossConfig, 'DELETE', key);
+        const resp = await requestUrl({
+            url: `https://${host}/${encodeOSSKey(key)}`,
+            method: 'DELETE',
+            headers,
+            throw: false,
+        });
+
+        if (resp.status >= 400) {
+            throw new Error(`HTTP ${resp.status}: ${resp.text}`);
+        }
     }
 
     private parseRegion(region: string): string {

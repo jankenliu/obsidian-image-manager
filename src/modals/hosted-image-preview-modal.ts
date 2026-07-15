@@ -3,9 +3,14 @@ import type { HostedImage } from '../types';
 import { t } from '../i18n';
 import { formatFileSize } from '../utils/path-utils';
 import { makePublicUrlReadable } from '../utils/public-url';
+import { ConfirmDialog } from './confirm-dialog';
 
 export class HostedImagePreviewModal extends Modal {
-    constructor(app: App, private readonly image: HostedImage) {
+    constructor(
+        app: App,
+        private readonly image: HostedImage,
+        private readonly onDelete?: () => Promise<void>
+    ) {
         super(app);
     }
 
@@ -36,6 +41,14 @@ export class HostedImagePreviewModal extends Modal {
         const insertButton = buttons.createEl('button', { text: t('modal.preview.insert') });
         insertButton.addEventListener('click', () => this.insertImage());
 
+        if (this.onDelete) {
+            const deleteButton = buttons.createEl('button', {
+                cls: 'mod-warning',
+                text: t('modal.preview.deleteHosted'),
+            });
+            deleteButton.addEventListener('click', () => this.confirmDelete());
+        }
+
         const closeButton = buttons.createEl('button', { text: t('modal.preview.close') });
         closeButton.addEventListener('click', () => this.close());
     }
@@ -62,5 +75,25 @@ export class HostedImagePreviewModal extends Modal {
         editor.replaceSelection(this.buildReference());
         new Notice(t('notice.imageInserted'));
         this.close();
+    }
+
+    private confirmDelete() {
+        if (!this.onDelete) return;
+        new ConfirmDialog(this.app, {
+            title: t('modal.preview.deleteHostedTitle'),
+            message: t('modal.preview.deleteHostedMessage', { name: this.image.name }),
+            confirmText: t('modal.preview.deleteHosted'),
+            onConfirm: async () => {
+                try {
+                    await this.onDelete?.();
+                    new Notice(t('modal.preview.deleteHostedSuccess'));
+                    this.close();
+                } catch (error) {
+                    new Notice(t('modal.preview.deleteHostedFailed', {
+                        error: error instanceof Error ? error.message : t('modal.imageBrowser.unknownError'),
+                    }));
+                }
+            },
+        }).open();
     }
 }

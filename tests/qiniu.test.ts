@@ -82,18 +82,39 @@ describe('QiniuUploader', () => {
 
         const images = await uploader.listImages();
 
-        expect(requestUrl).toHaveBeenCalledWith(expect.objectContaining({
+        const request = requestUrl.mock.calls[0]?.[0] as {
+            url: string;
+            method: string;
+            headers: Record<string, string>;
+        };
+        expect(request).toMatchObject({
             url: 'https://rsf.qbox.me/list?bucket=images&limit=1000',
             method: 'GET',
-            headers: {
-                Authorization: expect.stringMatching(/^QBox access-key:/),
-            },
-        }));
+        });
+        expect(request.headers.Authorization).toMatch(/^QBox access-key:/);
         expect(images).toEqual([expect.objectContaining({
             key: 'uploads/中文 图.png',
             name: '中文 图.png',
             size: 2048,
             url: 'https://cdn.example.com/bucket/uploads/%E4%B8%AD%E6%96%87%20%E5%9B%BE.png',
         })]);
+    });
+
+    it('deletes an object using the Qiniu management API', async () => {
+        requestUrl.mockResolvedValue({ status: 200, json: {}, text: '' });
+        const uploader = new QiniuUploader(createHostingConfig());
+
+        await uploader.deleteImage('uploads/中文 图.png');
+
+        const request = requestUrl.mock.calls[0]?.[0] as {
+            url: string;
+            method: string;
+            headers: Record<string, string>;
+        };
+        expect(request).toMatchObject({
+            method: 'POST',
+        });
+        expect(request.url).toMatch(/^https:\/\/rs\.qbox\.me\/delete\//);
+        expect(request.headers.Authorization).toMatch(/^QBox access-key:/);
     });
 });

@@ -5,6 +5,7 @@ import type { HostedImage, UploadResult, ImageHostingConfig, UploadContext } fro
 export abstract class UploaderBase {
     abstract readonly name: string;
     readonly supportsListing: boolean = false;
+    readonly supportsDeletion: boolean = false;
     protected config: ImageHostingConfig;
     private readonly globalUploadPathTemplate: string;
 
@@ -26,6 +27,11 @@ export abstract class UploaderBase {
     /** 列出图床中的图片；具体服务商按需实现 */
     listImages(): Promise<HostedImage[]> {
         return Promise.reject(new Error('Image listing is not supported by this provider'));
+    }
+
+    /** 删除图床对象；具体服务商按需实现 */
+    deleteImage(_key: string): Promise<void> {
+        return Promise.reject(new Error('Image deletion is not supported by this provider'));
     }
 
     protected getUploadPathTemplate(): string {

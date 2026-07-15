@@ -3,19 +3,29 @@ import type ImageManagerPlugin from '../main';
 import type { ImageHostingConfig } from '../types';
 import { OrphanFinder } from '../utils/orphan-finder';
 import { encodePathSegments, formatFileSize } from '../utils/path-utils';
+import { trashLocalImage } from '../utils/local-image-deletion';
 import { RenameImageModal } from './rename-image';
+import { ConfirmDialog } from './confirm-dialog';
 import { t } from '../i18n';
 
 export class ImagePreviewModal extends Modal {
     private file: TFile;
     private plugin: ImageManagerPlugin;
     private browserModal?: Modal;
+    private onDelete?: (file: TFile) => void;
 
-    constructor(app: App, plugin: ImageManagerPlugin, file: TFile, browserModal?: Modal) {
+    constructor(
+        app: App,
+        plugin: ImageManagerPlugin,
+        file: TFile,
+        browserModal?: Modal,
+        onDelete?: (file: TFile) => void
+    ) {
         super(app);
         this.plugin = plugin;
         this.file = file;
         this.browserModal = browserModal;
+        this.onDelete = onDelete;
     }
 
     async onOpen() {
@@ -133,6 +143,13 @@ export class ImagePreviewModal extends Modal {
         const renameBtn = btnsEl.createEl('button', { text: t('modal.preview.rename') });
         renameBtn.addEventListener('click', () => void this.renameImage());
 
+        // Delete local image
+        const deleteBtn = btnsEl.createEl('button', {
+            text: t('modal.preview.deleteLocal'),
+            cls: 'mod-warning',
+        });
+        deleteBtn.addEventListener('click', () => this.confirmDelete());
+
         // Close
         const closeBtn = btnsEl.createEl('button', { text: t('modal.preview.close') });
         closeBtn.addEventListener('click', () => this.close());
@@ -199,6 +216,26 @@ export class ImagePreviewModal extends Modal {
                     new Notice(t('notice.renameFailed', { error: e instanceof Error ? e.message : 'Unknown error' }));
                 }
             })();
+        }).open();
+    }
+
+    private confirmDelete() {
+        new ConfirmDialog(this.app, {
+            title: t('modal.preview.deleteLocalTitle'),
+            message: t('modal.preview.deleteLocalMessage', { name: this.file.name }),
+            confirmText: t('modal.preview.deleteLocal'),
+            onConfirm: async () => {
+                try {
+                    const deletedFile = this.file;
+                    await trashLocalImage(this.app, deletedFile, this.onDelete);
+                    new Notice(t('modal.preview.deleteLocalSuccess'));
+                    this.close();
+                } catch (error) {
+                    new Notice(t('modal.preview.deleteLocalFailed', {
+                        error: error instanceof Error ? error.message : t('modal.imageBrowser.unknownError'),
+                    }));
+                }
+            },
         }).open();
     }
 

@@ -130,6 +130,11 @@ export const en: Record<string, string> = {
     'modal.preview.deleteHostedMessage': 'Delete "{name}" from image hosting? This action cannot be undone.',
     'modal.preview.deleteHostedSuccess': 'Hosted image deleted',
     'modal.preview.deleteHostedFailed': 'Failed to delete hosted image: {error}',
+    'modal.preview.deleteLocal': 'Move to trash',
+    'modal.preview.deleteLocalTitle': 'Delete local image',
+    'modal.preview.deleteLocalMessage': 'Move "{name}" to trash? Existing references to this image will stop working.',
+    'modal.preview.deleteLocalSuccess': 'Local image moved to trash',
+    'modal.preview.deleteLocalFailed': 'Failed to delete local image: {error}',
     'notice.refCopied': 'Reference copied to clipboard',
 
     // Confirm Dialog

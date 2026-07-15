@@ -359,9 +359,7 @@ export class ImageBrowserModal extends Modal {
                 folderCountText: (count) => t('modal.imageBrowser.treeImageCount', {
                     count: String(count),
                 }),
-                openItem: (file) => {
-                    new ImagePreviewModal(this.app, this.plugin, file, this).open();
-                },
+                openItem: (file) => this.openLocalImage(file),
             });
             return;
         }
@@ -375,9 +373,25 @@ export class ImageBrowserModal extends Modal {
             img.setAttribute('width', thumbSize);
             img.setAttribute('height', thumbSize);
             card.cardEl.addEventListener('click', () => {
-                new ImagePreviewModal(this.app, this.plugin, file, this).open();
+                this.openLocalImage(file);
             });
         }
+    }
+
+    private openLocalImage(file: TFile) {
+        new ImagePreviewModal(
+            this.app,
+            this.plugin,
+            file,
+            this,
+            (deletedFile) => this.handleLocalImageDeleted(deletedFile)
+        ).open();
+    }
+
+    private handleLocalImageDeleted(file: TFile) {
+        this.allImages = this.allImages.filter((image) => image.path !== file.path);
+        this.orphanPaths?.delete(file.path);
+        this.applyFilterAndSort();
     }
 
     private renderHostedContent() {

@@ -129,6 +129,11 @@ export const zh: Record<string, string> = {
     'modal.preview.deleteHostedMessage': '确定要从图床删除“{name}”吗？此操作不可撤销。',
     'modal.preview.deleteHostedSuccess': '图床图片已删除',
     'modal.preview.deleteHostedFailed': '删除图床图片失败：{error}',
+    'modal.preview.deleteLocal': '移到回收站',
+    'modal.preview.deleteLocalTitle': '删除本地图片',
+    'modal.preview.deleteLocalMessage': '确定要将“{name}”移到回收站吗？该图片现有的引用将会失效。',
+    'modal.preview.deleteLocalSuccess': '本地图片已移到回收站',
+    'modal.preview.deleteLocalFailed': '删除本地图片失败：{error}',
     'notice.refCopied': '引用已复制到剪贴板',
 
     // 确认对话框

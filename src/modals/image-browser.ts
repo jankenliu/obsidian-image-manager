@@ -9,9 +9,11 @@ import { createUploader } from '../uploaders/uploader-factory';
 import { t } from '../i18n';
 import { HostedImagePreviewModal } from './hosted-image-preview-modal';
 import { ImagePreviewModal } from './image-preview-modal';
+import { renderImageTree } from './image-browser-tree';
 
 type BrowserSource = 'local' | 'hosting';
 type BrowserSort = 'name' | 'size' | 'modified' | 'created';
+type BrowserView = 'grid' | 'tree';
 
 export class ImageBrowserModal extends Modal {
     private plugin: ImageManagerPlugin;
@@ -30,7 +32,14 @@ export class ImageBrowserModal extends Modal {
     private hostingSelect: HTMLSelectElement | null = null;
     private localBtn: HTMLButtonElement | null = null;
     private hostingBtn: HTMLButtonElement | null = null;
+    private gridViewBtn: HTMLButtonElement | null = null;
+    private treeViewBtn: HTMLButtonElement | null = null;
     private source: BrowserSource = 'local';
+    private view: BrowserView = 'grid';
+    private readonly localExpandedPaths = new Set<string>();
+    private readonly hostingExpandedPaths = new Map<string, Set<string>>();
+    private localTreeInitialized = false;
+    private readonly initializedHostingTrees = new Set<string>();
     private showLocalOrphansOnly = false;
     private showHostedOrphansOnly = false;
     private debounceTimer: number | null = null;
@@ -97,6 +106,20 @@ export class ImageBrowserModal extends Modal {
         });
         this.orphanBtn.addEventListener('click', () => void this.toggleOrphanFilter());
 
+        const viewSwitch = controls.createDiv({ cls: 'image-browser-view-switch' });
+        this.gridViewBtn = viewSwitch.createEl('button', {
+            cls: 'image-browser-view-btn is-active',
+            text: t('modal.imageBrowser.gridView'),
+        });
+        this.treeViewBtn = viewSwitch.createEl('button', {
+            cls: 'image-browser-view-btn',
+            text: t('modal.imageBrowser.treeView'),
+        });
+        this.gridViewBtn.setAttribute('aria-pressed', 'true');
+        this.treeViewBtn.setAttribute('aria-pressed', 'false');
+        this.gridViewBtn.addEventListener('click', () => this.switchView('grid'));
+        this.treeViewBtn.addEventListener('click', () => this.switchView('tree'));
+
         this.countEl = controls.createEl('span', { cls: 'image-browser-count' });
         this.gridEl = contentEl.createDiv({ cls: 'image-browser-grid' });
         this.loadLocalImages();
@@ -147,6 +170,16 @@ export class ImageBrowserModal extends Modal {
             if (this.sortSelect?.value === 'created') this.sortSelect.value = 'name';
             void this.loadHostedImages();
         }
+    }
+
+    private switchView(view: BrowserView) {
+        if (view === this.view) return;
+        this.view = view;
+        this.gridViewBtn?.toggleClass('is-active', view === 'grid');
+        this.treeViewBtn?.toggleClass('is-active', view === 'tree');
+        this.gridViewBtn?.setAttribute('aria-pressed', String(view === 'grid'));
+        this.treeViewBtn?.setAttribute('aria-pressed', String(view === 'tree'));
+        this.renderContent();
     }
 
     private loadLocalImages() {
@@ -272,7 +305,7 @@ export class ImageBrowserModal extends Modal {
 
         const sortBy = (this.sortSelect?.value ?? 'name') as BrowserSort;
         this.filteredImages = this.scanner.sortImages(images, sortBy, 'asc');
-        this.renderGrid();
+        this.renderContent();
     }
 
     private applyHostedFilterAndSort() {
@@ -287,24 +320,49 @@ export class ImageBrowserModal extends Modal {
             if (sortBy === 'modified') return left.modified - right.modified;
             return left.name.localeCompare(right.name);
         });
-        this.renderGrid();
+        this.renderContent();
     }
 
-    private renderGrid() {
+    private renderContent() {
         if (!this.gridEl) return;
         this.gridEl.empty();
+        this.gridEl.toggleClass('image-browser-grid', this.view === 'grid');
+        this.gridEl.toggleClass('image-browser-tree', this.view === 'tree');
         if (this.source === 'hosting') {
-            this.renderHostedGrid();
+            this.renderHostedContent();
         } else {
-            this.renderLocalGrid();
+            this.renderLocalContent();
         }
     }
 
-    private renderLocalGrid() {
+    private renderLocalContent() {
         if (!this.gridEl) return;
         this.updateCount(this.filteredImages.length, this.allImages.length);
         if (this.filteredImages.length === 0) {
             this.renderEmpty(t('modal.imageBrowser.noImages'));
+            return;
+        }
+
+        if (this.view === 'tree') {
+            const initializeTopLevel = !this.localTreeInitialized;
+            this.localTreeInitialized = true;
+            renderImageTree({
+                containerEl: this.gridEl,
+                items: this.filteredImages,
+                getPath: (file) => file.path,
+                getName: (file) => file.name,
+                getImageUrl: (file) => this.app.vault.getResourcePath(file),
+                getMeta: (file) => formatFileSize(file.stat.size),
+                expandedPaths: this.localExpandedPaths,
+                initializeTopLevel,
+                forceExpanded: Boolean(this.searchInput?.value.trim()),
+                folderCountText: (count) => t('modal.imageBrowser.treeImageCount', {
+                    count: String(count),
+                }),
+                openItem: (file) => {
+                    new ImagePreviewModal(this.app, this.plugin, file, this).open();
+                },
+            });
             return;
         }
 
@@ -322,7 +380,7 @@ export class ImageBrowserModal extends Modal {
         }
     }
 
-    private renderHostedGrid() {
+    private renderHostedContent() {
         if (!this.gridEl) return;
         this.updateCount(this.filteredHostedImages.length, this.hostedImages.length);
         if (this.loadingHosting) {
@@ -344,6 +402,29 @@ export class ImageBrowserModal extends Modal {
         const uploader = config
             ? createUploader(config, this.plugin.settings.uploadPathTemplate)
             : null;
+        if (this.view === 'tree') {
+            const configId = config?.id ?? '';
+            const expandedPaths = this.getHostingExpandedPaths(configId);
+            const initializeTopLevel = !this.initializedHostingTrees.has(configId);
+            this.initializedHostingTrees.add(configId);
+            renderImageTree({
+                containerEl: this.gridEl,
+                items: this.filteredHostedImages,
+                getPath: (image) => image.key,
+                getName: (image) => image.name,
+                getImageUrl: (image) => image.url,
+                getMeta: (image) => formatFileSize(image.size),
+                expandedPaths,
+                initializeTopLevel,
+                forceExpanded: Boolean(this.searchInput?.value.trim()),
+                folderCountText: (count) => t('modal.imageBrowser.treeImageCount', {
+                    count: String(count),
+                }),
+                openItem: (image) => this.openHostedImage(image, config, uploader?.supportsDeletion ?? false),
+            });
+            return;
+        }
+
         for (const image of this.filteredHostedImages) {
             const card = this.createCard(image.name, image.key, image.size);
             const img = card.imageContainer.createEl('img', { attr: { src: image.url } });
@@ -351,15 +432,32 @@ export class ImageBrowserModal extends Modal {
             img.setAttribute('width', thumbSize);
             img.setAttribute('height', thumbSize);
             card.cardEl.addEventListener('click', () => {
-                new HostedImagePreviewModal(
-                    this.app,
-                    image,
-                    uploader?.supportsDeletion && config
-                        ? () => this.deleteHostedImage(image, config)
-                        : undefined
-                ).open();
+                this.openHostedImage(image, config, uploader?.supportsDeletion ?? false);
             });
         }
+    }
+
+    private getHostingExpandedPaths(configId: string): Set<string> {
+        let expandedPaths = this.hostingExpandedPaths.get(configId);
+        if (!expandedPaths) {
+            expandedPaths = new Set<string>();
+            this.hostingExpandedPaths.set(configId, expandedPaths);
+        }
+        return expandedPaths;
+    }
+
+    private openHostedImage(
+        image: HostedImage,
+        config: ImageHostingConfig | null,
+        supportsDeletion: boolean
+    ) {
+        new HostedImagePreviewModal(
+            this.app,
+            image,
+            supportsDeletion && config
+                ? () => this.deleteHostedImage(image, config)
+                : undefined
+        ).open();
     }
 
     private getSelectedHostingConfig(): ImageHostingConfig | null {

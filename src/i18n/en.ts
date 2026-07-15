@@ -110,6 +110,9 @@ export const en: Record<string, string> = {
     'modal.imageBrowser.listUnsupported': 'This hosting provider does not support image browsing.',
     'modal.imageBrowser.loadFailed': 'Failed to load hosted images: {error}',
     'modal.imageBrowser.unknownError': 'Unknown error',
+    'modal.imageBrowser.gridView': 'Grid',
+    'modal.imageBrowser.treeView': 'Tree',
+    'modal.imageBrowser.treeImageCount': '{count} image(s)',
 
     // Image Preview Modal
     'modal.preview.path': 'Path: ',

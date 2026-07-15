@@ -109,6 +109,9 @@ export const zh: Record<string, string> = {
     'modal.imageBrowser.listUnsupported': '该图床不支持图片浏览。',
     'modal.imageBrowser.loadFailed': '加载图床图片失败：{error}',
     'modal.imageBrowser.unknownError': '未知错误',
+    'modal.imageBrowser.gridView': '网格',
+    'modal.imageBrowser.treeView': '目录树',
+    'modal.imageBrowser.treeImageCount': '{count} 张图片',
 
     // 图片预览
     'modal.preview.path': '路径：',

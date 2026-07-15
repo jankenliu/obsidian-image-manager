@@ -15,12 +15,14 @@ import { UploadQueue } from './uploaders/upload-queue';
 import { setLocale, t } from './i18n';
 import { getDateTemplateVars, getFileNameWithoutExt, encodePathSegments } from './utils/path-utils';
 import { makePublicUrlReadable } from './utils/public-url';
+import { EmptyFolderCleaner } from './utils/empty-folder-cleaner';
 
 export default class ImageManagerPlugin extends Plugin {
     settings: ImageManagerSettings;
     refConverter: RefConverter;
     imageOptimizer: ImageOptimizer;
     batchRename: BatchRename;
+    private emptyFolderCleaner: EmptyFolderCleaner;
     private isReorganizing = false;
     async onload() {
         await this.loadSettings();
@@ -29,6 +31,7 @@ export default class ImageManagerPlugin extends Plugin {
         this.refConverter = new RefConverter(this.app);
         this.imageOptimizer = new ImageOptimizer(this.app);
         this.batchRename = new BatchRename(this.app, this.settings);
+        this.emptyFolderCleaner = new EmptyFolderCleaner(this.app.vault);
 
         // Ribbon icon
         if (this.settings.enableImageBrowser) {
@@ -813,7 +816,12 @@ export default class ImageManagerPlugin extends Plugin {
             for (const part of parts) {
                 current = current ? `${current}/${part}` : part;
                 if (!this.app.vault.getAbstractFileByPath(current)) {
-                    await this.app.vault.createFolder(current).catch(() => {});
+                    try {
+                        await this.app.vault.createFolder(current);
+                        this.emptyFolderCleaner.trackCreatedFolder(current);
+                    } catch {
+                        // Another paste operation may have created the same folder concurrently.
+                    }
                 }
             }
         }
@@ -915,7 +923,9 @@ export default class ImageManagerPlugin extends Plugin {
 
                 // Delete local file if user doesn't want to keep it
                 if (!this.settings.keepLocalCopy) {
+                    const localParentPath = savedFile.parent?.path ?? '';
                     await this.app.fileManager.trashFile(savedFile);
+                    await this.emptyFolderCleaner.cleanupFrom(localParentPath);
                 }
 
                 notice.hide();

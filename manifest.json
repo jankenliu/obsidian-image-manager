@@ -1,6 +1,6 @@
 {
-	"id": "md-image-manager",
-	"name": "Markdown Image Manager",
+	"id": "md-image-manager-plus",
+	"name": "Markdown Image Manager Plus",
 	"version": "1.0.8",
 	"minAppVersion": "1.12.0",
 	"description": "A powerful image management plugin. Browse, optimize, upload to image hosting, and organize your images. Ideal for converting Wiki image refs to standard Markdown format.",

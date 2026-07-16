@@ -1,4 +1,4 @@
-import { App, Modal, Notice, TFile } from 'obsidian';
+import { App, Modal, TFile } from 'obsidian';
 import type ImageManagerPlugin from '../main';
 import type { HostedImage, ImageHostingConfig } from '../types';
 import { ImageScanner } from '../utils/image-scanner';
@@ -10,6 +10,10 @@ import { t } from '../i18n';
 import { HostedImagePreviewModal } from './hosted-image-preview-modal';
 import { ImagePreviewModal } from './image-preview-modal';
 import { renderImageTree } from './image-browser-tree';
+import {
+    getRemainingScanFeedbackDuration,
+    ImageBrowserScanState,
+} from './image-browser-scan-state';
 
 type BrowserSource = 'local' | 'hosting';
 type BrowserSort = 'name' | 'size' | 'modified' | 'created';
@@ -29,6 +33,7 @@ export class ImageBrowserModal extends Modal {
     private searchInput: HTMLInputElement | null = null;
     private sortSelect: HTMLSelectElement | null = null;
     private orphanBtn: HTMLButtonElement | null = null;
+    private orphanStatusEl: HTMLDivElement | null = null;
     private hostingSelect: HTMLSelectElement | null = null;
     private localBtn: HTMLButtonElement | null = null;
     private hostingBtn: HTMLButtonElement | null = null;
@@ -40,8 +45,11 @@ export class ImageBrowserModal extends Modal {
     private readonly hostingExpandedPaths = new Map<string, Set<string>>();
     private localTreeInitialized = false;
     private readonly initializedHostingTrees = new Set<string>();
+    private readonly orphanScanState = new ImageBrowserScanState();
     private showLocalOrphansOnly = false;
     private showHostedOrphansOnly = false;
+    private localOrphanError = '';
+    private hostedOrphanError = '';
     private debounceTimer: number | null = null;
     private loadSequence = 0;
     private loadingHosting = false;
@@ -121,12 +129,17 @@ export class ImageBrowserModal extends Modal {
         this.treeViewBtn.addEventListener('click', () => this.switchView('tree'));
 
         this.countEl = controls.createEl('span', { cls: 'image-browser-count' });
+        this.orphanStatusEl = contentEl.createDiv({
+            cls: 'image-browser-filter-status image-browser-hidden',
+            attr: { role: 'status', 'aria-live': 'polite' },
+        });
         this.gridEl = contentEl.createDiv({ cls: 'image-browser-grid' });
         this.loadLocalImages();
     }
 
     onClose() {
         this.loadSequence++;
+        this.orphanScanState.cancel();
         if (this.debounceTimer) window.clearTimeout(this.debounceTimer);
         this.contentEl.empty();
     }
@@ -154,6 +167,7 @@ export class ImageBrowserModal extends Modal {
 
     private switchSource(source: BrowserSource) {
         if (source === this.source) return;
+        this.orphanScanState.cancel();
         this.source = source;
         this.localBtn?.toggleClass('is-active', source === 'local');
         this.hostingBtn?.toggleClass('is-active', source === 'hosting');
@@ -165,7 +179,11 @@ export class ImageBrowserModal extends Modal {
         if (source === 'local') {
             this.loadingHosting = false;
             this.loadSequence++;
-            this.applyFilterAndSort();
+            if (this.showLocalOrphansOnly && !this.orphanPaths) {
+                void this.scanLocalOrphans();
+            } else {
+                this.applyFilterAndSort();
+            }
         } else {
             if (this.sortSelect?.value === 'created') this.sortSelect.value = 'name';
             void this.loadHostedImages();
@@ -188,12 +206,14 @@ export class ImageBrowserModal extends Modal {
     }
 
     private async loadHostedImages() {
+        this.orphanScanState.cancel();
         const requestSequence = ++this.loadSequence;
         const config = this.getEnabledHostingConfigs().find(
             (item) => item.id === this.hostingSelect?.value
         );
         this.hostedImages = [];
         this.hostedOrphanKeys = null;
+        this.hostedOrphanError = '';
         this.hostingError = '';
 
         if (!config) {
@@ -254,32 +274,83 @@ export class ImageBrowserModal extends Modal {
         }
 
         this.showLocalOrphansOnly = !this.showLocalOrphansOnly;
-        this.updateOrphanButton();
-
         if (this.showLocalOrphansOnly) {
-            new Notice(t('modal.imageBrowser.orphanScanning'));
-            const finder = new OrphanFinder(this.app, this.plugin.settings.supportedExtensions);
-            const result = await finder.findOrphans();
-            this.orphanPaths = new Set(result.orphans.map((file) => file.path));
+            await this.scanLocalOrphans();
         } else {
+            this.orphanScanState.cancel();
             this.orphanPaths = null;
+            this.localOrphanError = '';
+            this.updateOrphanButton();
+            this.applyFilterAndSort();
         }
-
-        this.applyFilterAndSort();
     }
 
     private async toggleHostedOrphanFilter() {
         this.showHostedOrphansOnly = !this.showHostedOrphansOnly;
-        this.updateOrphanButton();
         if (this.showHostedOrphansOnly) {
-            new Notice(t('modal.imageBrowser.hostedOrphanScanning'));
-            const orphans = await findOrphanHostedImages(this.app, this.hostedImages);
-            if (this.source !== 'hosting' || !this.showHostedOrphansOnly) return;
-            this.hostedOrphanKeys = new Set(orphans.map((image) => image.key));
+            await this.scanHostedOrphans();
         } else {
+            this.orphanScanState.cancel();
             this.hostedOrphanKeys = null;
+            this.hostedOrphanError = '';
+            this.updateOrphanButton();
+            this.applyFilterAndSort();
         }
-        this.applyFilterAndSort();
+    }
+
+    private async scanLocalOrphans() {
+        const startedAt = Date.now();
+        const token = this.orphanScanState.start('local');
+        this.orphanPaths = null;
+        this.localOrphanError = '';
+        this.updateOrphanButton();
+        this.renderContent();
+
+        try {
+            const finder = new OrphanFinder(this.app, this.plugin.settings.supportedExtensions);
+            const result = await finder.findOrphans();
+            if (!this.orphanScanState.isCurrent(token, 'local') || this.source !== 'local') return;
+            this.orphanPaths = new Set(result.orphans.map((file) => file.path));
+        } catch (error) {
+            if (!this.orphanScanState.isCurrent(token, 'local') || this.source !== 'local') return;
+            this.showLocalOrphansOnly = false;
+            this.localOrphanError = t('modal.imageBrowser.orphanScanFailed', {
+                error: error instanceof Error ? error.message : t('modal.imageBrowser.unknownError'),
+            });
+        } finally {
+            await this.waitForScanFeedback(startedAt);
+            if (this.orphanScanState.finish(token, 'local') && this.source === 'local') {
+                this.updateOrphanButton();
+                this.applyFilterAndSort();
+            }
+        }
+    }
+
+    private async scanHostedOrphans() {
+        const startedAt = Date.now();
+        const token = this.orphanScanState.start('hosting');
+        this.hostedOrphanKeys = null;
+        this.hostedOrphanError = '';
+        this.updateOrphanButton();
+        this.renderContent();
+
+        try {
+            const orphans = await findOrphanHostedImages(this.app, this.hostedImages);
+            if (!this.orphanScanState.isCurrent(token, 'hosting') || this.source !== 'hosting') return;
+            this.hostedOrphanKeys = new Set(orphans.map((image) => image.key));
+        } catch (error) {
+            if (!this.orphanScanState.isCurrent(token, 'hosting') || this.source !== 'hosting') return;
+            this.showHostedOrphansOnly = false;
+            this.hostedOrphanError = t('modal.imageBrowser.orphanScanFailed', {
+                error: error instanceof Error ? error.message : t('modal.imageBrowser.unknownError'),
+            });
+        } finally {
+            await this.waitForScanFeedback(startedAt);
+            if (this.orphanScanState.finish(token, 'hosting') && this.source === 'hosting') {
+                this.updateOrphanButton();
+                this.applyFilterAndSort();
+            }
+        }
     }
 
     private updateOrphanButton() {
@@ -287,8 +358,35 @@ export class ImageBrowserModal extends Modal {
         const isActive = this.source === 'local'
             ? this.showLocalOrphansOnly
             : this.showHostedOrphansOnly;
-        this.orphanBtn.toggleClass('is-active', isActive);
-        this.orphanBtn.disabled = this.source === 'hosting' && this.loadingHosting;
+        const isScanning = this.orphanScanState.isScanning(this.source);
+        this.orphanBtn.setText(isScanning
+            ? t('modal.imageBrowser.orphanFilterScanning')
+            : isActive
+                ? t('modal.imageBrowser.showAllImages')
+                : t('modal.imageBrowser.orphanFilter'));
+        this.orphanBtn.toggleClass('is-active', isActive && !isScanning);
+        this.orphanBtn.toggleClass('is-scanning', isScanning);
+        this.orphanBtn.setAttribute('aria-pressed', String(isActive));
+        this.orphanBtn.disabled = isScanning
+            || (this.source === 'hosting' && this.loadingHosting);
+        this.updateOrphanStatus(isActive, isScanning);
+    }
+
+    private updateOrphanStatus(isActive: boolean, isScanning: boolean) {
+        if (!this.orphanStatusEl) return;
+        const visible = isActive || isScanning;
+        this.orphanStatusEl.toggleClass('image-browser-hidden', !visible);
+        this.orphanStatusEl.toggleClass('is-active', isActive && !isScanning);
+        this.orphanStatusEl.toggleClass('is-scanning', isScanning);
+        if (!visible) return;
+
+        this.orphanStatusEl.setText(isScanning
+            ? this.source === 'local'
+                ? t('modal.imageBrowser.orphanScanning')
+                : t('modal.imageBrowser.hostedOrphanScanning')
+            : this.source === 'local'
+                ? t('modal.imageBrowser.localOrphanFilterActive')
+                : t('modal.imageBrowser.hostedOrphanFilterActive'));
     }
 
     private applyFilterAndSort() {
@@ -337,7 +435,16 @@ export class ImageBrowserModal extends Modal {
 
     private renderLocalContent() {
         if (!this.gridEl) return;
+        if (this.orphanScanState.isScanning('local')) {
+            this.setCountText(t('modal.imageBrowser.scanningCount'));
+            this.renderLoading(t('modal.imageBrowser.orphanScanning'));
+            return;
+        }
         this.updateCount(this.filteredImages.length, this.allImages.length);
+        if (this.localOrphanError) {
+            this.renderEmpty(this.localOrphanError);
+            return;
+        }
         if (this.filteredImages.length === 0) {
             this.renderEmpty(t('modal.imageBrowser.noImages'));
             return;
@@ -396,13 +503,23 @@ export class ImageBrowserModal extends Modal {
 
     private renderHostedContent() {
         if (!this.gridEl) return;
-        this.updateCount(this.filteredHostedImages.length, this.hostedImages.length);
         if (this.loadingHosting) {
+            this.setCountText(t('modal.imageBrowser.loadingCount'));
             this.renderEmpty(t('modal.imageBrowser.loadingHosting'));
             return;
         }
+        if (this.orphanScanState.isScanning('hosting')) {
+            this.setCountText(t('modal.imageBrowser.scanningCount'));
+            this.renderLoading(t('modal.imageBrowser.hostedOrphanScanning'));
+            return;
+        }
+        this.updateCount(this.filteredHostedImages.length, this.hostedImages.length);
         if (this.hostingError) {
             this.renderEmpty(this.hostingError);
+            return;
+        }
+        if (this.hostedOrphanError) {
+            this.renderEmpty(this.hostedOrphanError);
             return;
         }
         if (this.filteredHostedImages.length === 0) {
@@ -502,14 +619,32 @@ export class ImageBrowserModal extends Modal {
     }
 
     private updateCount(count: number, total: number) {
-        if (!this.countEl) return;
-        this.countEl.textContent = t('modal.imageBrowser.showing', {
+        this.setCountText(t('modal.imageBrowser.showing', {
             count: String(count),
             total: String(total),
-        });
+        }));
+    }
+
+    private setCountText(text: string) {
+        if (this.countEl) this.countEl.textContent = text;
     }
 
     private renderEmpty(message: string) {
         this.gridEl?.createDiv({ cls: 'image-browser-empty', text: message });
+    }
+
+    private renderLoading(message: string) {
+        const loadingEl = this.gridEl?.createDiv({
+            cls: 'image-browser-loading',
+            attr: { role: 'status', 'aria-live': 'polite' },
+        });
+        loadingEl?.createDiv({ cls: 'image-browser-loading-spinner' });
+        loadingEl?.createDiv({ cls: 'image-browser-loading-text', text: message });
+    }
+
+    private async waitForScanFeedback(startedAt: number): Promise<void> {
+        const remaining = getRemainingScanFeedbackDuration(startedAt, Date.now());
+        if (remaining === 0) return;
+        await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
     }
 }

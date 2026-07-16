@@ -6,6 +6,7 @@ import { encodePathSegments, formatFileSize } from '../utils/path-utils';
 import { trashLocalImage } from '../utils/local-image-deletion';
 import { RenameImageModal } from './rename-image';
 import { ConfirmDialog } from './confirm-dialog';
+import { canDeleteImageFromPreview } from './image-preview-delete-visibility';
 import { t } from '../i18n';
 
 export class ImagePreviewModal extends Modal {
@@ -143,12 +144,13 @@ export class ImagePreviewModal extends Modal {
         const renameBtn = btnsEl.createEl('button', { text: t('modal.preview.rename') });
         renameBtn.addEventListener('click', () => void this.renameImage());
 
-        // Delete local image
-        const deleteBtn = btnsEl.createEl('button', {
-            text: t('modal.preview.deleteLocal'),
-            cls: 'mod-warning',
-        });
-        deleteBtn.addEventListener('click', () => this.confirmDelete());
+        if (canDeleteImageFromPreview(true, notes.length)) {
+            const deleteBtn = btnsEl.createEl('button', {
+                text: t('modal.preview.deleteLocal'),
+                cls: 'mod-warning',
+            });
+            deleteBtn.addEventListener('click', () => this.confirmDelete());
+        }
 
         // Close
         const closeBtn = btnsEl.createEl('button', { text: t('modal.preview.close') });

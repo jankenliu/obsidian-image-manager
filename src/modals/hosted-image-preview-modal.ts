@@ -8,6 +8,7 @@ import {
     type HostedImageReferencingNote,
 } from '../utils/hosted-orphan-finder';
 import { ConfirmDialog } from './confirm-dialog';
+import { canDeleteImageFromPreview } from './image-preview-delete-visibility';
 
 export class HostedImagePreviewModal extends Modal {
     constructor(
@@ -41,8 +42,12 @@ export class HostedImagePreviewModal extends Modal {
             cls: 'image-preview-meta',
             text: t('modal.preview.scanningReferences'),
         });
+        let referenceScanSucceeded = false;
+        let referencingNoteCount = 0;
         try {
             const notes = await getHostedImageReferencingNotes(this.app, this.image);
+            referenceScanSucceeded = true;
+            referencingNoteCount = notes.length;
             referenceContainer.empty();
             this.renderReferences(referenceContainer, notes);
         } catch (error) {
@@ -67,7 +72,11 @@ export class HostedImagePreviewModal extends Modal {
         const insertButton = buttons.createEl('button', { text: t('modal.preview.insert') });
         insertButton.addEventListener('click', () => this.insertImage());
 
-        if (this.onDelete) {
+        if (canDeleteImageFromPreview(
+            referenceScanSucceeded,
+            referencingNoteCount,
+            this.onDelete !== undefined
+        )) {
             const deleteButton = buttons.createEl('button', {
                 cls: 'mod-warning',
                 text: t('modal.preview.deleteHosted'),

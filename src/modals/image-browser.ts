@@ -20,6 +20,7 @@ import {
     getRemainingScanFeedbackDuration,
     ImageBrowserScanState,
 } from './image-browser-scan-state';
+import { getOrphanBadgeLabel } from './image-browser-orphan-label';
 
 type BrowserSource = 'local' | 'hosting';
 type BrowserSort = 'name' | 'size' | 'modified' | 'created';
@@ -67,6 +68,12 @@ export class ImageBrowserModal extends Modal {
     private loadingHosting = false;
     private hostingError = '';
     private deletingBatchSource: BrowserSource | null = null;
+    private localOrphanScanPromise: Promise<Set<string>> | null = null;
+    private hostedOrphanScan: {
+        sequence: number;
+        promise: Promise<Set<string>>;
+    } | null = null;
+    private isModalOpen = false;
 
     constructor(app: App, plugin: ImageManagerPlugin) {
         super(app);
@@ -75,6 +82,7 @@ export class ImageBrowserModal extends Modal {
     }
 
     onOpen() {
+        this.isModalOpen = true;
         const { contentEl } = this;
         contentEl.addClass('image-browser');
 
@@ -152,6 +160,7 @@ export class ImageBrowserModal extends Modal {
     }
 
     onClose() {
+        this.isModalOpen = false;
         this.loadSequence++;
         this.orphanScanState.cancel();
         if (this.debounceTimer) window.clearTimeout(this.debounceTimer);
@@ -219,6 +228,7 @@ export class ImageBrowserModal extends Modal {
                 void this.scanLocalOrphans();
             } else {
                 this.applyFilterAndSort();
+                if (!this.orphanPaths) void this.refreshLocalOrphanLabels();
             }
         } else {
             if (this.sortSelect?.value === 'created') this.sortSelect.value = 'name';
@@ -239,6 +249,7 @@ export class ImageBrowserModal extends Modal {
     private loadLocalImages() {
         this.allImages = this.scanner.getAllImages();
         this.applyFilterAndSort();
+        void this.refreshLocalOrphanLabels();
     }
 
     private async loadHostedImages() {
@@ -275,10 +286,13 @@ export class ImageBrowserModal extends Modal {
             const images = await uploader.listImages();
             if (requestSequence !== this.loadSequence || this.source !== 'hosting') return;
             this.hostedImages = images.filter((image) => this.isSupportedImage(image.name));
+            this.loadingHosting = false;
+            this.updateOrphanButton();
             if (this.showHostedOrphansOnly) {
-                const orphans = await findOrphanHostedImages(this.app, this.hostedImages);
-                if (requestSequence !== this.loadSequence || this.source !== 'hosting') return;
-                this.hostedOrphanKeys = new Set(orphans.map((image) => image.key));
+                await this.scanHostedOrphans();
+            } else {
+                this.applyFilterAndSort();
+                void this.refreshHostedOrphanLabels(requestSequence);
             }
         } catch (error) {
             if (requestSequence !== this.loadSequence || this.source !== 'hosting') return;
@@ -312,10 +326,14 @@ export class ImageBrowserModal extends Modal {
 
         this.showLocalOrphansOnly = !this.showLocalOrphansOnly;
         if (this.showLocalOrphansOnly) {
-            await this.scanLocalOrphans();
+            if (this.orphanPaths) {
+                this.updateOrphanButton();
+                this.applyFilterAndSort();
+            } else {
+                await this.scanLocalOrphans();
+            }
         } else {
             this.orphanScanState.cancel();
-            this.orphanPaths = null;
             this.localOrphanError = '';
             this.batchSelection.clear('local');
             this.updateOrphanButton();
@@ -326,10 +344,14 @@ export class ImageBrowserModal extends Modal {
     private async toggleHostedOrphanFilter() {
         this.showHostedOrphansOnly = !this.showHostedOrphansOnly;
         if (this.showHostedOrphansOnly) {
-            await this.scanHostedOrphans();
+            if (this.hostedOrphanKeys) {
+                this.updateOrphanButton();
+                this.applyFilterAndSort();
+            } else {
+                await this.scanHostedOrphans();
+            }
         } else {
             this.orphanScanState.cancel();
-            this.hostedOrphanKeys = null;
             this.hostedOrphanError = '';
             this.batchSelection.clear('hosting');
             this.updateOrphanButton();
@@ -347,10 +369,9 @@ export class ImageBrowserModal extends Modal {
         this.renderContent();
 
         try {
-            const finder = new OrphanFinder(this.app, this.plugin.settings.supportedExtensions);
-            const result = await finder.findOrphans();
+            const orphanPaths = await this.getLocalOrphanPaths();
+            this.orphanPaths = orphanPaths;
             if (!this.orphanScanState.isCurrent(token, 'local') || this.source !== 'local') return;
-            this.orphanPaths = new Set(result.orphans.map((file) => file.path));
         } catch (error) {
             if (!this.orphanScanState.isCurrent(token, 'local') || this.source !== 'local') return;
             this.showLocalOrphansOnly = false;
@@ -369,6 +390,7 @@ export class ImageBrowserModal extends Modal {
 
     private async scanHostedOrphans() {
         const startedAt = Date.now();
+        const requestSequence = this.loadSequence;
         const token = this.orphanScanState.start('hosting');
         this.hostedOrphanKeys = null;
         this.hostedOrphanError = '';
@@ -377,9 +399,9 @@ export class ImageBrowserModal extends Modal {
         this.renderContent();
 
         try {
-            const orphans = await findOrphanHostedImages(this.app, this.hostedImages);
+            const orphanKeys = await this.getHostedOrphanKeys(requestSequence);
+            if (requestSequence === this.loadSequence) this.hostedOrphanKeys = orphanKeys;
             if (!this.orphanScanState.isCurrent(token, 'hosting') || this.source !== 'hosting') return;
-            this.hostedOrphanKeys = new Set(orphans.map((image) => image.key));
         } catch (error) {
             if (!this.orphanScanState.isCurrent(token, 'hosting') || this.source !== 'hosting') return;
             this.showHostedOrphansOnly = false;
@@ -393,6 +415,72 @@ export class ImageBrowserModal extends Modal {
                 this.updateOrphanButton();
                 this.applyFilterAndSort();
             }
+        }
+    }
+
+    private getLocalOrphanPaths(): Promise<Set<string>> {
+        if (this.localOrphanScanPromise) return this.localOrphanScanPromise;
+        const finder = new OrphanFinder(this.app, this.plugin.settings.supportedExtensions);
+        const scan = finder.findOrphans().then(
+            (result) => new Set(result.orphans.map((file) => file.path))
+        );
+        this.localOrphanScanPromise = scan;
+        void scan.then(
+            () => {
+                if (this.localOrphanScanPromise === scan) this.localOrphanScanPromise = null;
+            },
+            () => {
+                if (this.localOrphanScanPromise === scan) this.localOrphanScanPromise = null;
+            }
+        );
+        return scan;
+    }
+
+    private async refreshLocalOrphanLabels() {
+        try {
+            this.orphanPaths = await this.getLocalOrphanPaths();
+            if (this.isModalOpen
+                && this.source === 'local'
+                && !this.orphanScanState.isScanning('local')) {
+                this.applyFilterAndSort();
+            }
+        } catch {
+            // Keep the list usable without labels; explicit filtering retries with visible feedback.
+        }
+    }
+
+    private getHostedOrphanKeys(requestSequence: number): Promise<Set<string>> {
+        if (this.hostedOrphanScan?.sequence === requestSequence) {
+            return this.hostedOrphanScan.promise;
+        }
+        const images = [...this.hostedImages];
+        const scan = findOrphanHostedImages(this.app, images).then(
+            (orphans) => new Set(orphans.map((image) => image.key))
+        );
+        this.hostedOrphanScan = { sequence: requestSequence, promise: scan };
+        void scan.then(
+            () => {
+                if (this.hostedOrphanScan?.promise === scan) this.hostedOrphanScan = null;
+            },
+            () => {
+                if (this.hostedOrphanScan?.promise === scan) this.hostedOrphanScan = null;
+            }
+        );
+        return scan;
+    }
+
+    private async refreshHostedOrphanLabels(requestSequence: number) {
+        try {
+            const orphanKeys = await this.getHostedOrphanKeys(requestSequence);
+            if (requestSequence !== this.loadSequence) return;
+            this.hostedOrphanKeys = orphanKeys;
+            if (this.isModalOpen
+                && this.source === 'hosting'
+                && !this.orphanScanState.isScanning('hosting')) {
+                this.applyFilterAndSort();
+            }
+        } catch {
+            // Keep the remote list usable without labels; explicit filtering retries visibly.
         }
     }
 
@@ -506,6 +594,7 @@ export class ImageBrowserModal extends Modal {
                 getName: (file) => file.name,
                 getImageUrl: (file) => this.app.vault.getResourcePath(file),
                 getMeta: (file) => formatFileSize(file.stat.size),
+                getBadge: (file) => this.getLocalOrphanBadge(file),
                 expandedPaths: this.localExpandedPaths,
                 initializeTopLevel,
                 forceExpanded: Boolean(this.searchInput?.value.trim()),
@@ -527,7 +616,12 @@ export class ImageBrowserModal extends Modal {
         }
 
         for (const file of this.filteredImages) {
-            const card = this.createCard(file.name, file.path, file.stat.size);
+            const card = this.createCard(
+                file.name,
+                file.path,
+                file.stat.size,
+                this.getLocalOrphanBadge(file)
+            );
             if (this.isBatchSelectionAvailable()) {
                 this.attachCardSelection(card.cardEl, 'local', file.path, file.name);
             }
@@ -604,6 +698,7 @@ export class ImageBrowserModal extends Modal {
                 getName: (image) => image.name,
                 getImageUrl: (image) => image.url,
                 getMeta: (image) => formatFileSize(image.size),
+                getBadge: (image) => this.getHostedOrphanBadge(image),
                 expandedPaths,
                 initializeTopLevel,
                 forceExpanded: Boolean(this.searchInput?.value.trim()),
@@ -625,7 +720,12 @@ export class ImageBrowserModal extends Modal {
         }
 
         for (const image of this.filteredHostedImages) {
-            const card = this.createCard(image.name, image.key, image.size);
+            const card = this.createCard(
+                image.name,
+                image.key,
+                image.size,
+                this.getHostedOrphanBadge(image)
+            );
             if (this.isBatchSelectionAvailable()) {
                 this.attachCardSelection(card.cardEl, 'hosting', image.key, image.name);
             }
@@ -867,13 +967,37 @@ export class ImageBrowserModal extends Modal {
         }));
     }
 
-    private createCard(name: string, path: string, size: number): {
+    private getLocalOrphanBadge(file: TFile): string | null {
+        return getOrphanBadgeLabel(
+            file,
+            (item) => item.path,
+            this.orphanPaths,
+            t('modal.imageBrowser.orphanBadge')
+        );
+    }
+
+    private getHostedOrphanBadge(image: HostedImage): string | null {
+        return getOrphanBadgeLabel(
+            image,
+            (item) => item.key,
+            this.hostedOrphanKeys,
+            t('modal.imageBrowser.orphanBadge')
+        );
+    }
+
+    private createCard(name: string, path: string, size: number, badge: string | null): {
         cardEl: HTMLDivElement;
         imageContainer: HTMLDivElement;
     } {
         const cardEl = this.gridEl!.createDiv({ cls: 'image-browser-card' });
         cardEl.setAttribute('title', `${path}\n${t('modal.imageBrowser.insertTooltip')}`);
         const imageContainer = cardEl.createDiv({ cls: 'image-browser-card-img' });
+        if (badge) {
+            cardEl.createDiv({
+                cls: 'image-browser-orphan-badge image-browser-card-orphan-badge',
+                text: badge,
+            });
+        }
         const nameEl = cardEl.createDiv({ cls: 'image-browser-card-name', text: name });
         nameEl.setAttribute('title', name);
         cardEl.createDiv({ cls: 'image-browser-card-meta', text: formatFileSize(size) });

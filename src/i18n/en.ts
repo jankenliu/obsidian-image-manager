@@ -120,6 +120,7 @@ export const en: Record<string, string> = {
     'modal.imageBrowser.gridView': 'Grid',
     'modal.imageBrowser.treeView': 'Tree',
     'modal.imageBrowser.treeImageCount': '{count} image(s)',
+    'modal.imageBrowser.orphanBadge': 'Orphan',
     'modal.imageBrowser.selectAll': 'Select current results',
     'modal.imageBrowser.selectNone': 'Clear selection',
     'modal.imageBrowser.selectedCount': '{count} selected',

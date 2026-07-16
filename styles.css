@@ -220,6 +220,26 @@
     font-size: 0.95em;
 }
 
+.image-browser-orphan-badge {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border: 1px solid var(--text-warning);
+    border-radius: 999px;
+    color: var(--text-warning);
+    background-color: var(--background-primary);
+    font-size: 0.7em;
+    font-weight: 500;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+.image-browser-card-orphan-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1;
+}
+
 .image-browser-card.is-selected {
     border-color: var(--interactive-accent);
     background-color: var(--background-modifier-hover);
@@ -387,6 +407,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.image-browser-tree-item-badge {
+    margin-left: auto;
+}
+
+.image-browser-tree-item-badge + .image-browser-tree-item-meta {
+    margin-left: 0;
 }
 
 .image-browser-tree-item-meta {

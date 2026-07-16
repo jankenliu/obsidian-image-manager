@@ -119,6 +119,7 @@ export const zh: Record<string, string> = {
     'modal.imageBrowser.gridView': '网格',
     'modal.imageBrowser.treeView': '目录树',
     'modal.imageBrowser.treeImageCount': '{count} 张图片',
+    'modal.imageBrowser.orphanBadge': '孤立图片',
     'modal.imageBrowser.selectAll': '全选当前结果',
     'modal.imageBrowser.selectNone': '取消全选',
     'modal.imageBrowser.selectedCount': '已选择 {count} 张',

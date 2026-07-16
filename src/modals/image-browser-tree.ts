@@ -20,6 +20,7 @@ export interface ImageTreeRenderOptions<T> {
     getName: (item: T) => string;
     getImageUrl: (item: T) => string;
     getMeta: (item: T) => string;
+    getBadge?: (item: T) => string | null;
     expandedPaths: Set<string>;
     initializeTopLevel: boolean;
     forceExpanded: boolean;
@@ -161,6 +162,13 @@ function renderItems<T>(
             cls: 'image-browser-tree-item-name',
             text: options.getName(item),
         });
+        const badge = options.getBadge?.(item);
+        if (badge) {
+            itemButton.createSpan({
+                cls: 'image-browser-orphan-badge image-browser-tree-item-badge',
+                text: badge,
+            });
+        }
         itemButton.createSpan({
             cls: 'image-browser-tree-item-meta',
             text: options.getMeta(item),

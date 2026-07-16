@@ -1,7 +1,8 @@
 import { App, TFile } from 'obsidian';
 import type { ImageReference, ReferenceFormat } from '../types';
-import { MD_IMAGE_REGEX, WIKI_IMAGE_REGEX } from '../constants';
+import { WIKI_IMAGE_REGEX } from '../constants';
 import { encodePathSegments } from './path-utils';
+import { extractMarkdownImageReferences } from './markdown-image-reference';
 
 export class RefConverter {
     private app: App;
@@ -15,20 +16,18 @@ export class RefConverter {
         const refs: ImageReference[] = [];
         let match: RegExpExecArray | null;
 
-        // Reset lastIndex
-        MD_IMAGE_REGEX.lastIndex = 0;
         WIKI_IMAGE_REGEX.lastIndex = 0;
 
         // Parse Markdown references
-        while ((match = MD_IMAGE_REGEX.exec(text)) !== null) {
-            const line = text.substring(0, match.index).split('\n').length - 1;
+        for (const reference of extractMarkdownImageReferences(text)) {
+            const line = text.substring(0, reference.index).split('\n').length - 1;
             refs.push({
-                fullMatch: match[0],
-                altText: match[1] ?? '',
-                path: match[2] ?? '',
+                fullMatch: reference.fullMatch,
+                altText: reference.altText,
+                path: reference.destination,
                 format: 'markdown',
                 line,
-                col: match.index,
+                col: reference.index,
             });
         }
 
@@ -131,10 +130,9 @@ export class RefConverter {
 
     /** 统计文件中的引用数量 */
     countReferences(text: string): { markdown: number; wiki: number } {
-        MD_IMAGE_REGEX.lastIndex = 0;
         WIKI_IMAGE_REGEX.lastIndex = 0;
         return {
-            markdown: (text.match(new RegExp(MD_IMAGE_REGEX.source, 'gi')) ?? []).length,
+            markdown: extractMarkdownImageReferences(text).length,
             wiki: (text.match(new RegExp(WIKI_IMAGE_REGEX.source, 'gi')) ?? []).length,
         };
     }

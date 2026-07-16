@@ -28,6 +28,28 @@ function createFile(path: string): TFile {
 }
 
 describe('Orphan finder HTML image references', () => {
+    it('does not mark a Markdown image path containing parentheses as orphaned', async () => {
+        const image = createFile('linux/assets/内存问题(内存够用但报oom)-1.png');
+        const note = createFile('linux/内存问题.md');
+        const content = '![内存问题](assets/内存问题(内存够用但报oom)-1.png)';
+        const app = {
+            vault: {
+                getFiles: () => [image, note],
+                getMarkdownFiles: () => [note],
+                cachedRead: vi.fn(() => Promise.resolve(content)),
+            },
+            metadataCache: {
+                getFirstLinkpathDest: vi.fn(() => null),
+            },
+        } as unknown as App;
+        const finder = new OrphanFinder(app, ['png']);
+
+        await expect(finder.findOrphans()).resolves.toMatchObject({ orphans: [] });
+        await expect(finder.getReferencingNotes(image)).resolves.toEqual([
+            { path: 'linux/内存问题.md', lines: [0] },
+        ]);
+    });
+
     it('does not mark an image referenced by a relative HTML img tag as orphaned', async () => {
         const image = createFile('assets/tencentdb/logo.png');
         const note = createFile('tencentdb/README.md');

@@ -48,6 +48,20 @@ describe('RefConverter', () => {
         expect(converter.parseReferences('![[second.png]]')).toHaveLength(1);
     });
 
+    it('parses and counts a Markdown image path containing parentheses', () => {
+        const source = '![内存问题](linux/assets/内存问题(内存够用但报oom)-1.png)';
+
+        expect(converter.parseReferences(source)).toMatchObject([{
+            format: 'markdown',
+            path: 'linux/assets/内存问题(内存够用但报oom)-1.png',
+            fullMatch: source,
+        }]);
+        expect(converter.countReferences(source)).toEqual({ markdown: 1, wiki: 0 });
+        expect(converter.convertAllReferences(source, 'wiki')).toBe(
+            '![[内存问题(内存够用但报oom)-1.png|内存问题]]'
+        );
+    });
+
     it('counts both reference formats', () => {
         expect(converter.countReferences('![a](a.png) ![[b.png]] ![](c.jpg)')).toEqual({
             markdown: 2,

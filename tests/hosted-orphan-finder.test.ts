@@ -46,6 +46,27 @@ describe('Hosted orphan finder', () => {
         await expect(findOrphanHostedImages(app, [used, orphan])).resolves.toEqual([orphan]);
     });
 
+    it('treats an HTML image tag as a hosted image reference', async () => {
+        const notes = [{ path: 'one.md' }] as TFile[];
+        const app = {
+            vault: {
+                getMarkdownFiles: () => notes,
+                cachedRead: vi.fn(() => Promise.resolve(
+                    '<img alt="remote" src="https://cdn.example.com/images/photo.png?width=880&amp;height=440" />'
+                )),
+            },
+        } as unknown as App;
+        const image = createImage(
+            'images/photo.png',
+            'https://cdn.example.com/images/photo.png'
+        );
+
+        await expect(findOrphanHostedImages(app, [image])).resolves.toEqual([]);
+        await expect(getHostedImageReferencingNotes(app, image)).resolves.toEqual([
+            { path: 'one.md', lines: [0] },
+        ]);
+    });
+
     it('finds every zero-based line that embeds the hosted image', () => {
         const content = [
             '![first](https://cdn.example.com/images/photo.png?resize=400)',
@@ -53,12 +74,13 @@ describe('Hosted orphan finder', () => {
             '![second](<https://cdn.example.com/images/photo.png#preview> "title")',
             '![other](https://cdn.example.com/images/other.png)',
             '![third](https://cdn.example.com/images/photo.png)',
+            '<img src="https://cdn.example.com/images/photo.png?width=880" alt="fourth">',
         ].join('\n');
 
         expect(findHostedImageReferenceLines(
             content,
             'https://cdn.example.com/images/photo.png'
-        )).toEqual([0, 2, 4]);
+        )).toEqual([0, 2, 4, 5]);
     });
 
     it('groups hosted image references by note with all matching lines', async () => {

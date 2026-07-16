@@ -1,10 +1,16 @@
 import type { App } from 'obsidian';
 import type { HostedImage } from '../types';
 import { MD_IMAGE_REGEX } from '../constants';
+import { extractHtmlImageReferences } from './html-image-reference';
 
 export interface HostedImageReferencingNote {
     path: string;
     lines: number[];
+}
+
+interface ExternalImageReference {
+    value: string;
+    index: number;
 }
 
 function extractMarkdownDestination(rawDestination: string): string {
@@ -41,17 +47,10 @@ export function findHostedImageReferenceLines(text: string, imageUrl: string): n
     if (!targetUrl) return [];
 
     const lines: number[] = [];
-    const imagePattern = new RegExp(MD_IMAGE_REGEX.source, 'g');
-    let currentLine = 0;
-    let scannedThrough = 0;
-    let match: RegExpExecArray | null;
-
-    while ((match = imagePattern.exec(text)) !== null) {
-        for (let index = scannedThrough; index < match.index; index++) {
-            if (text[index] === '\n') currentLine++;
+    for (const reference of extractExternalImageReferences(text)) {
+        if (normalizeHostedImageUrl(reference.value) === targetUrl) {
+            lines.push(getLineNumber(text, reference.index));
         }
-        scannedThrough = match.index;
-        if (normalizeHostedImageUrl(match[2] ?? '') === targetUrl) lines.push(currentLine);
     }
 
     return lines;
@@ -76,14 +75,11 @@ export async function getHostedImageReferencingNotes(
 /** Find hosted images whose public URL is not embedded in any Markdown note. */
 export async function findOrphanHostedImages(app: App, images: HostedImage[]): Promise<HostedImage[]> {
     const referencedUrls = new Set<string>();
-    const imagePattern = new RegExp(MD_IMAGE_REGEX.source, 'g');
 
     for (const file of app.vault.getMarkdownFiles()) {
         const content = await app.vault.cachedRead(file);
-        imagePattern.lastIndex = 0;
-        let match: RegExpExecArray | null;
-        while ((match = imagePattern.exec(content)) !== null) {
-            const normalizedUrl = normalizeHostedImageUrl(match[2] ?? '');
+        for (const reference of extractExternalImageReferences(content)) {
+            const normalizedUrl = normalizeHostedImageUrl(reference.value);
             if (normalizedUrl) referencedUrls.add(normalizedUrl);
         }
     }
@@ -92,4 +88,21 @@ export async function findOrphanHostedImages(app: App, images: HostedImage[]): P
         const normalizedUrl = normalizeHostedImageUrl(image.url);
         return normalizedUrl === null || !referencedUrls.has(normalizedUrl);
     });
+}
+
+function extractExternalImageReferences(text: string): ExternalImageReference[] {
+    const references: ExternalImageReference[] = [];
+    const imagePattern = new RegExp(MD_IMAGE_REGEX.source, 'g');
+    let match: RegExpExecArray | null;
+    while ((match = imagePattern.exec(text)) !== null) {
+        references.push({ value: match[2] ?? '', index: match.index });
+    }
+    for (const reference of extractHtmlImageReferences(text)) {
+        references.push({ value: reference.src, index: reference.index });
+    }
+    return references.sort((left, right) => left.index - right.index);
+}
+
+function getLineNumber(text: string, index: number): number {
+    return text.substring(0, index).split('\n').length - 1;
 }

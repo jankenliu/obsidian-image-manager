@@ -1,6 +1,7 @@
 import { App, TFile, normalizePath } from 'obsidian';
 import { ImageScanner } from './image-scanner';
 import { MD_IMAGE_REGEX, WIKI_IMAGE_REGEX } from '../constants';
+import { extractHtmlImageReferences } from './html-image-reference';
 
 export interface OrphanResult {
     orphans: TFile[];
@@ -25,8 +26,7 @@ export class OrphanFinder {
         const referencedPaths = await this.getAllReferencedImages();
 
         const orphans = allImages.filter((file) => {
-            // Check if the image name or path is referenced
-            return !referencedPaths.has(file.name) && !referencedPaths.has(file.path);
+            return !referencedPaths.has(file.path);
         });
 
         return {
@@ -45,8 +45,7 @@ export class OrphanFinder {
 
         for (const file of mdFiles) {
             const content = await this.app.vault.cachedRead(file);
-            const noteDir = file.path.substring(0, file.path.lastIndexOf('/'));
-            this.extractReferences(content, referenced, noteDir);
+            this.extractReferences(content, referenced, file.path);
         }
 
         return referenced;
@@ -71,7 +70,6 @@ export class OrphanFinder {
     }
 
     private findReferenceLines(text: string, file: TFile, notePath: string): number[] {
-        const noteDir = notePath.substring(0, notePath.lastIndexOf('/'));
         const result: number[] = [];
 
         // Check markdown references
@@ -79,15 +77,8 @@ export class OrphanFinder {
         MD_IMAGE_REGEX.lastIndex = 0;
         while ((match = MD_IMAGE_REGEX.exec(text)) !== null) {
             const path = match[2]?.trim();
-            if (path && !path.startsWith('http://') && !path.startsWith('https://')) {
-                const decoded = this.tryDecode(path);
-                if (decoded === file.path || decoded === file.name) {
-                    result.push(text.substring(0, match.index).split('\n').length - 1);
-                } else if (decoded.startsWith('../') || decoded.startsWith('./') || (!decoded.startsWith('/') && decoded.includes('/'))) {
-                    if (this.resolveRelative(noteDir, decoded) === file.path) {
-                        result.push(text.substring(0, match.index).split('\n').length - 1);
-                    }
-                }
+            if (path && this.matchesFilePath(path, file, notePath)) {
+                result.push(this.getLineNumber(text, match.index));
             }
         }
 
@@ -95,14 +86,23 @@ export class OrphanFinder {
         WIKI_IMAGE_REGEX.lastIndex = 0;
         while ((match = WIKI_IMAGE_REGEX.exec(text)) !== null) {
             const path = match[1]?.trim();
-            if (path && !path.startsWith('http://') && !path.startsWith('https://')) {
-                if (path === file.path || path === file.name) {
-                    result.push(text.substring(0, match.index).split('\n').length - 1);
-                }
+            if (path && this.matchesFilePath(path, file, notePath)) {
+                result.push(this.getLineNumber(text, match.index));
             }
         }
 
-        return result;
+        // Check HTML <img src="path"> references
+        for (const reference of extractHtmlImageReferences(text)) {
+            if (this.isLocalPath(reference.src) && this.matchesFilePath(
+                reference.src,
+                file,
+                notePath
+            )) {
+                result.push(this.getLineNumber(text, reference.index));
+            }
+        }
+
+        return result.sort((left, right) => left - right);
     }
 
     private resolveRelative(baseDir: string, relativePath: string): string {
@@ -123,10 +123,60 @@ export class OrphanFinder {
         try { return decodeURIComponent(path); } catch { return path; }
     }
 
+    private isLocalPath(path: string): boolean {
+        return !/^(?:https?:|data:|blob:)/i.test(path);
+    }
+
+    private matchesFilePath(path: string, file: TFile, notePath: string): boolean {
+        if (!this.isLocalPath(path)) return false;
+        return this.resolveLocalReferencePaths(path, notePath).has(file.path);
+    }
+
+    private getLineNumber(text: string, index: number): number {
+        return text.substring(0, index).split('\n').length - 1;
+    }
+
+    private addLocalReference(path: string, result: Set<string>, notePath: string): void {
+        if (!this.isLocalPath(path)) return;
+        for (const resolvedPath of this.resolveLocalReferencePaths(path, notePath)) {
+            result.add(resolvedPath);
+        }
+    }
+
+    private resolveLocalReferencePaths(path: string, notePath: string): Set<string> {
+        const result = new Set<string>();
+        const decoded = this.tryDecode(path);
+        const metadataMatch = this.app.metadataCache?.getFirstLinkpathDest(decoded, notePath);
+        if (metadataMatch instanceof TFile) result.add(metadataMatch.path);
+
+        const noteDir = notePath.substring(0, notePath.lastIndexOf('/'));
+        if (decoded.startsWith('/')) {
+            result.add(normalizePath(decoded.slice(1)));
+        } else if (decoded.startsWith('../') || decoded.startsWith('./')) {
+            result.add(this.resolveRelative(noteDir, decoded));
+            result.add(normalizePath(decoded.replace(/^(?:\.\.\/|\.\/)+/, '')));
+        } else if (decoded.includes('/')) {
+            result.add(normalizePath(decoded));
+            result.add(this.resolveRelative(noteDir, decoded));
+        } else {
+            result.add(normalizePath(noteDir ? `${noteDir}/${decoded}` : decoded));
+            result.add(normalizePath(decoded));
+        }
+
+        if (!decoded.includes('/')) {
+            const filenameMatches = this.app.vault.getFiles().filter((file) =>
+                file.name === decoded
+            );
+            if (filenameMatches.length === 1) result.add(filenameMatches[0]!.path);
+        }
+
+        return result;
+    }
+
     /**
      * 从文本中提取所有图片引用路径
      */
-    private extractReferences(text: string, result: Set<string>, noteDir: string): void {
+    private extractReferences(text: string, result: Set<string>, notePath: string): void {
         let match: RegExpExecArray | null;
 
         // Reset lastIndex
@@ -136,33 +186,18 @@ export class OrphanFinder {
         // Markdown references: ![alt](path)
         while ((match = MD_IMAGE_REGEX.exec(text)) !== null) {
             const path = match[2]?.trim();
-            if (path) {
-                // Skip external URLs
-                if (!path.startsWith('http://') && !path.startsWith('https://')) {
-                    const decoded = this.tryDecode(path);
-                    result.add(decoded);
-                    // Resolve relative paths to absolute vault paths
-                    if (decoded.startsWith('../') || decoded.startsWith('./') || (!decoded.startsWith('/') && decoded.includes('/'))) {
-                        result.add(this.resolveRelative(noteDir, decoded));
-                    }
-                    // Also add just the filename for matching
-                    const filename = decoded.split('/').pop();
-                    if (filename) result.add(filename);
-                }
-            }
+            if (path) this.addLocalReference(path, result, notePath);
         }
 
         // Wiki references: ![[path]] or ![[path|alt]]
         while ((match = WIKI_IMAGE_REGEX.exec(text)) !== null) {
             const path = match[1]?.trim();
-            if (path) {
-                // Skip external URLs
-                if (!path.startsWith('http://') && !path.startsWith('https://')) {
-                    result.add(path);
-                    const filename = path.split('/').pop();
-                    if (filename) result.add(filename);
-                }
-            }
+            if (path) this.addLocalReference(path, result, notePath);
+        }
+
+        // HTML references: <img src="path">
+        for (const reference of extractHtmlImageReferences(text)) {
+            this.addLocalReference(reference.src, result, notePath);
         }
     }
 }

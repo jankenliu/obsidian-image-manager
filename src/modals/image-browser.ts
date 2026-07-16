@@ -658,7 +658,8 @@ export class ImageBrowserModal extends Modal {
             image,
             supportsDeletion && config
                 ? () => this.deleteHostedImage(image, config)
-                : undefined
+                : undefined,
+            this
         ).open();
     }
 

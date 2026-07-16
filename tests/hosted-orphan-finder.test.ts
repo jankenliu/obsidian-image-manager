@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { App, TFile } from 'obsidian';
 import type { HostedImage } from '../src/types';
-import { findOrphanHostedImages, normalizeHostedImageUrl } from '../src/utils/hosted-orphan-finder';
+import {
+    findHostedImageReferenceLines,
+    findOrphanHostedImages,
+    getHostedImageReferencingNotes,
+    normalizeHostedImageUrl,
+} from '../src/utils/hosted-orphan-finder';
 
 function createImage(key: string, url: string): HostedImage {
     return {
@@ -39,5 +44,51 @@ describe('Hosted orphan finder', () => {
         const orphan = createImage('images/orphan.png', 'https://cdn.example.com/images/orphan.png');
 
         await expect(findOrphanHostedImages(app, [used, orphan])).resolves.toEqual([orphan]);
+    });
+
+    it('finds every zero-based line that embeds the hosted image', () => {
+        const content = [
+            '![first](https://cdn.example.com/images/photo.png?resize=400)',
+            '[normal link](https://cdn.example.com/images/photo.png)',
+            '![second](<https://cdn.example.com/images/photo.png#preview> "title")',
+            '![other](https://cdn.example.com/images/other.png)',
+            '![third](https://cdn.example.com/images/photo.png)',
+        ].join('\n');
+
+        expect(findHostedImageReferenceLines(
+            content,
+            'https://cdn.example.com/images/photo.png'
+        )).toEqual([0, 2, 4]);
+    });
+
+    it('groups hosted image references by note with all matching lines', async () => {
+        const notes = [
+            { path: 'notes/one.md' },
+            { path: 'notes/two.md' },
+            { path: 'notes/unused.md' },
+        ] as TFile[];
+        const contents = new Map([
+            ['notes/one.md', [
+                '![first](https://cdn.example.com/images/photo.png)',
+                '',
+                '![second](https://cdn.example.com/images/photo.png?width=200)',
+            ].join('\n')],
+            ['notes/two.md', '![photo](https://cdn.example.com/images/photo.png#large)'],
+            ['notes/unused.md', '![other](https://cdn.example.com/images/other.png)'],
+        ]);
+        const app = {
+            vault: {
+                getMarkdownFiles: () => notes,
+                cachedRead: vi.fn((file: TFile) => Promise.resolve(contents.get(file.path) ?? '')),
+            },
+        } as unknown as App;
+
+        await expect(getHostedImageReferencingNotes(
+            app,
+            createImage('images/photo.png', 'https://cdn.example.com/images/photo.png')
+        )).resolves.toEqual([
+            { path: 'notes/one.md', lines: [0, 2] },
+            { path: 'notes/two.md', lines: [0] },
+        ]);
     });
 });

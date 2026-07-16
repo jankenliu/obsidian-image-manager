@@ -2,6 +2,11 @@ import type { App } from 'obsidian';
 import type { HostedImage } from '../types';
 import { MD_IMAGE_REGEX } from '../constants';
 
+export interface HostedImageReferencingNote {
+    path: string;
+    lines: number[];
+}
+
 function extractMarkdownDestination(rawDestination: string): string {
     const trimmed = rawDestination.trim();
     if (trimmed.startsWith('<')) {
@@ -28,6 +33,44 @@ export function normalizeHostedImageUrl(value: string): string | null {
     } catch {
         return null;
     }
+}
+
+/** Return zero-based line numbers where a hosted image is embedded in Markdown. */
+export function findHostedImageReferenceLines(text: string, imageUrl: string): number[] {
+    const targetUrl = normalizeHostedImageUrl(imageUrl);
+    if (!targetUrl) return [];
+
+    const lines: number[] = [];
+    const imagePattern = new RegExp(MD_IMAGE_REGEX.source, 'g');
+    let currentLine = 0;
+    let scannedThrough = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = imagePattern.exec(text)) !== null) {
+        for (let index = scannedThrough; index < match.index; index++) {
+            if (text[index] === '\n') currentLine++;
+        }
+        scannedThrough = match.index;
+        if (normalizeHostedImageUrl(match[2] ?? '') === targetUrl) lines.push(currentLine);
+    }
+
+    return lines;
+}
+
+/** Find every Markdown note and line that embeds the hosted image. */
+export async function getHostedImageReferencingNotes(
+    app: App,
+    image: HostedImage
+): Promise<HostedImageReferencingNote[]> {
+    const notes: HostedImageReferencingNote[] = [];
+
+    for (const file of app.vault.getMarkdownFiles()) {
+        const content = await app.vault.cachedRead(file);
+        const lines = findHostedImageReferenceLines(content, image.url);
+        if (lines.length > 0) notes.push({ path: file.path, lines });
+    }
+
+    return notes;
 }
 
 /** Find hosted images whose public URL is not embedded in any Markdown note. */

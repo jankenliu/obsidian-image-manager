@@ -438,6 +438,11 @@
     font-style: italic;
 }
 
+.image-preview-reference-error {
+    color: var(--text-error);
+    font-size: 0.9em;
+}
+
 .image-preview-notes {
     margin-top: 4px;
     padding: 6px 10px;
@@ -469,6 +474,10 @@
 
 .image-preview-details-toggle {
     cursor: pointer;
+    padding: 0 2px;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
     -webkit-user-select: none;
     user-select: none;
     color: var(--text-muted);
@@ -490,6 +499,10 @@
 
 .image-preview-note-line-link {
     cursor: pointer;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
     color: var(--text-accent);
     font-family: var(--font-monospace);
     font-size: 0.85em;

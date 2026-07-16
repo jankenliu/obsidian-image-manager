@@ -1,4 +1,4 @@
-import { App, Modal, TFile } from 'obsidian';
+import { App, Modal, Notice, TFile } from 'obsidian';
 import type ImageManagerPlugin from '../main';
 import type { HostedImage, ImageHostingConfig } from '../types';
 import { ImageScanner } from '../utils/image-scanner';
@@ -10,6 +10,12 @@ import { t } from '../i18n';
 import { HostedImagePreviewModal } from './hosted-image-preview-modal';
 import { ImagePreviewModal } from './image-preview-modal';
 import { renderImageTree } from './image-browser-tree';
+import { ConfirmDialog } from './confirm-dialog';
+import { trashLocalImage } from '../utils/local-image-deletion';
+import {
+    deleteBatchItems,
+    ImageBrowserBatchSelection,
+} from './image-browser-batch';
 import {
     getRemainingScanFeedbackDuration,
     ImageBrowserScanState,
@@ -34,6 +40,11 @@ export class ImageBrowserModal extends Modal {
     private sortSelect: HTMLSelectElement | null = null;
     private orphanBtn: HTMLButtonElement | null = null;
     private orphanStatusEl: HTMLDivElement | null = null;
+    private batchToolbarEl: HTMLDivElement | null = null;
+    private selectAllBtn: HTMLButtonElement | null = null;
+    private selectNoneBtn: HTMLButtonElement | null = null;
+    private selectedCountEl: HTMLSpanElement | null = null;
+    private deleteSelectedBtn: HTMLButtonElement | null = null;
     private hostingSelect: HTMLSelectElement | null = null;
     private localBtn: HTMLButtonElement | null = null;
     private hostingBtn: HTMLButtonElement | null = null;
@@ -46,6 +57,7 @@ export class ImageBrowserModal extends Modal {
     private localTreeInitialized = false;
     private readonly initializedHostingTrees = new Set<string>();
     private readonly orphanScanState = new ImageBrowserScanState();
+    private readonly batchSelection = new ImageBrowserBatchSelection();
     private showLocalOrphansOnly = false;
     private showHostedOrphansOnly = false;
     private localOrphanError = '';
@@ -54,6 +66,7 @@ export class ImageBrowserModal extends Modal {
     private loadSequence = 0;
     private loadingHosting = false;
     private hostingError = '';
+    private deletingBatchSource: BrowserSource | null = null;
 
     constructor(app: App, plugin: ImageManagerPlugin) {
         super(app);
@@ -133,6 +146,7 @@ export class ImageBrowserModal extends Modal {
             cls: 'image-browser-filter-status image-browser-hidden',
             attr: { role: 'status', 'aria-live': 'polite' },
         });
+        this.createBatchToolbar(contentEl);
         this.gridEl = contentEl.createDiv({ cls: 'image-browser-grid' });
         this.loadLocalImages();
     }
@@ -159,6 +173,28 @@ export class ImageBrowserModal extends Modal {
         if (preferredId && configs.some((config) => config.id === preferredId)) {
             this.hostingSelect.value = preferredId;
         }
+    }
+
+    private createBatchToolbar(containerEl: HTMLElement) {
+        this.batchToolbarEl = containerEl.createDiv({
+            cls: 'image-browser-batch-toolbar image-browser-hidden',
+        });
+        this.selectAllBtn = this.batchToolbarEl.createEl('button', {
+            text: t('modal.imageBrowser.selectAll'),
+        });
+        this.selectNoneBtn = this.batchToolbarEl.createEl('button', {
+            text: t('modal.imageBrowser.selectNone'),
+        });
+        this.selectedCountEl = this.batchToolbarEl.createSpan({
+            cls: 'image-browser-selected-count',
+        });
+        this.deleteSelectedBtn = this.batchToolbarEl.createEl('button', {
+            cls: 'mod-warning image-browser-delete-selected',
+            text: t('modal.imageBrowser.deleteSelected'),
+        });
+        this.selectAllBtn.addEventListener('click', () => this.selectAllVisibleImages());
+        this.selectNoneBtn.addEventListener('click', () => this.clearCurrentSelection());
+        this.deleteSelectedBtn.addEventListener('click', () => this.confirmBatchDelete());
     }
 
     private getEnabledHostingConfigs(): ImageHostingConfig[] {
@@ -207,6 +243,7 @@ export class ImageBrowserModal extends Modal {
 
     private async loadHostedImages() {
         this.orphanScanState.cancel();
+        this.batchSelection.clear('hosting');
         const requestSequence = ++this.loadSequence;
         const config = this.getEnabledHostingConfigs().find(
             (item) => item.id === this.hostingSelect?.value
@@ -280,6 +317,7 @@ export class ImageBrowserModal extends Modal {
             this.orphanScanState.cancel();
             this.orphanPaths = null;
             this.localOrphanError = '';
+            this.batchSelection.clear('local');
             this.updateOrphanButton();
             this.applyFilterAndSort();
         }
@@ -293,6 +331,7 @@ export class ImageBrowserModal extends Modal {
             this.orphanScanState.cancel();
             this.hostedOrphanKeys = null;
             this.hostedOrphanError = '';
+            this.batchSelection.clear('hosting');
             this.updateOrphanButton();
             this.applyFilterAndSort();
         }
@@ -303,6 +342,7 @@ export class ImageBrowserModal extends Modal {
         const token = this.orphanScanState.start('local');
         this.orphanPaths = null;
         this.localOrphanError = '';
+        this.batchSelection.clear('local');
         this.updateOrphanButton();
         this.renderContent();
 
@@ -314,6 +354,7 @@ export class ImageBrowserModal extends Modal {
         } catch (error) {
             if (!this.orphanScanState.isCurrent(token, 'local') || this.source !== 'local') return;
             this.showLocalOrphansOnly = false;
+            this.batchSelection.clear('local');
             this.localOrphanError = t('modal.imageBrowser.orphanScanFailed', {
                 error: error instanceof Error ? error.message : t('modal.imageBrowser.unknownError'),
             });
@@ -331,6 +372,7 @@ export class ImageBrowserModal extends Modal {
         const token = this.orphanScanState.start('hosting');
         this.hostedOrphanKeys = null;
         this.hostedOrphanError = '';
+        this.batchSelection.clear('hosting');
         this.updateOrphanButton();
         this.renderContent();
 
@@ -341,6 +383,7 @@ export class ImageBrowserModal extends Modal {
         } catch (error) {
             if (!this.orphanScanState.isCurrent(token, 'hosting') || this.source !== 'hosting') return;
             this.showHostedOrphansOnly = false;
+            this.batchSelection.clear('hosting');
             this.hostedOrphanError = t('modal.imageBrowser.orphanScanFailed', {
                 error: error instanceof Error ? error.message : t('modal.imageBrowser.unknownError'),
             });
@@ -367,9 +410,11 @@ export class ImageBrowserModal extends Modal {
         this.orphanBtn.toggleClass('is-active', isActive && !isScanning);
         this.orphanBtn.toggleClass('is-scanning', isScanning);
         this.orphanBtn.setAttribute('aria-pressed', String(isActive));
-        this.orphanBtn.disabled = isScanning
+        this.orphanBtn.disabled = this.deletingBatchSource !== null
+            || isScanning
             || (this.source === 'hosting' && this.loadingHosting);
         this.updateOrphanStatus(isActive, isScanning);
+        this.updateBatchToolbar();
     }
 
     private updateOrphanStatus(isActive: boolean, isScanning: boolean) {
@@ -423,6 +468,7 @@ export class ImageBrowserModal extends Modal {
 
     private renderContent() {
         if (!this.gridEl) return;
+        this.updateBatchToolbar();
         this.gridEl.empty();
         this.gridEl.toggleClass('image-browser-grid', this.view === 'grid');
         this.gridEl.toggleClass('image-browser-tree', this.view === 'tree');
@@ -467,12 +513,24 @@ export class ImageBrowserModal extends Modal {
                     count: String(count),
                 }),
                 openItem: (file) => this.openLocalImage(file),
+                isItemSelected: this.isBatchSelectionAvailable()
+                    ? (file) => this.batchSelection.isSelected('local', file.path)
+                    : undefined,
+                onItemSelectionChange: this.isBatchSelectionAvailable()
+                    ? (file, selected) => this.setItemSelected('local', file.path, selected)
+                    : undefined,
+                selectionLabel: (file) => t('modal.imageBrowser.selectImage', {
+                    name: file.name,
+                }),
             });
             return;
         }
 
         for (const file of this.filteredImages) {
             const card = this.createCard(file.name, file.path, file.stat.size);
+            if (this.isBatchSelectionAvailable()) {
+                this.attachCardSelection(card.cardEl, 'local', file.path, file.name);
+            }
             const img = card.imageContainer.createEl('img', {
                 attr: { src: this.app.vault.getResourcePath(file) },
             });
@@ -498,6 +556,7 @@ export class ImageBrowserModal extends Modal {
     private handleLocalImageDeleted(file: TFile) {
         this.allImages = this.allImages.filter((image) => image.path !== file.path);
         this.orphanPaths?.delete(file.path);
+        this.batchSelection.remove('local', [file.path]);
         this.applyFilterAndSort();
     }
 
@@ -552,12 +611,24 @@ export class ImageBrowserModal extends Modal {
                     count: String(count),
                 }),
                 openItem: (image) => this.openHostedImage(image, config, uploader?.supportsDeletion ?? false),
+                isItemSelected: this.isBatchSelectionAvailable()
+                    ? (image) => this.batchSelection.isSelected('hosting', image.key)
+                    : undefined,
+                onItemSelectionChange: this.isBatchSelectionAvailable()
+                    ? (image, selected) => this.setItemSelected('hosting', image.key, selected)
+                    : undefined,
+                selectionLabel: (image) => t('modal.imageBrowser.selectImage', {
+                    name: image.name,
+                }),
             });
             return;
         }
 
         for (const image of this.filteredHostedImages) {
             const card = this.createCard(image.name, image.key, image.size);
+            if (this.isBatchSelectionAvailable()) {
+                this.attachCardSelection(card.cardEl, 'hosting', image.key, image.name);
+            }
             const img = card.imageContainer.createEl('img', { attr: { src: image.url } });
             const thumbSize = String(this.plugin.settings.thumbnailSize);
             img.setAttribute('width', thumbSize);
@@ -602,7 +673,197 @@ export class ImageBrowserModal extends Modal {
         await uploader.deleteImage(image.key);
         this.hostedImages = this.hostedImages.filter((item) => item.key !== image.key);
         this.hostedOrphanKeys?.delete(image.key);
+        this.batchSelection.remove('hosting', [image.key]);
         this.applyFilterAndSort();
+    }
+
+    private isBatchSelectionAvailable(source = this.source): boolean {
+        if (this.orphanScanState.isScanning(source)) return false;
+        if (source === 'local') {
+            return this.showLocalOrphansOnly
+                && this.orphanPaths !== null
+                && !this.localOrphanError;
+        }
+        const config = this.getSelectedHostingConfig();
+        const supportsDeletion = config
+            ? createUploader(config, this.plugin.settings.uploadPathTemplate).supportsDeletion
+            : false;
+        return this.showHostedOrphansOnly
+            && this.hostedOrphanKeys !== null
+            && !this.loadingHosting
+            && !this.hostedOrphanError
+            && !this.hostingError
+            && supportsDeletion;
+    }
+
+    private updateBatchToolbar() {
+        if (!this.batchToolbarEl) return;
+        const deleting = this.deletingBatchSource !== null;
+        if (this.localBtn) this.localBtn.disabled = deleting;
+        if (this.hostingBtn) this.hostingBtn.disabled = deleting;
+        if (this.hostingSelect) this.hostingSelect.disabled = deleting;
+        if (this.searchInput) this.searchInput.disabled = deleting;
+        if (this.sortSelect) this.sortSelect.disabled = deleting;
+        if (this.gridViewBtn) this.gridViewBtn.disabled = deleting;
+        if (this.treeViewBtn) this.treeViewBtn.disabled = deleting;
+        if (this.orphanBtn) this.orphanBtn.disabled = deleting
+            || this.orphanScanState.isScanning(this.source)
+            || (this.source === 'hosting' && this.loadingHosting);
+        const available = this.isBatchSelectionAvailable();
+        this.batchToolbarEl.toggleClass('image-browser-hidden', !available);
+        if (!available) return;
+
+        this.retainValidSelections(this.source);
+        const selectedCount = this.batchSelection.getCount(this.source);
+        const visibleCount = this.source === 'local'
+            ? this.filteredImages.length
+            : this.filteredHostedImages.length;
+        const deletingCurrentSource = this.deletingBatchSource === this.source;
+        if (this.selectedCountEl) {
+            this.selectedCountEl.setText(t('modal.imageBrowser.selectedCount', {
+                count: String(selectedCount),
+            }));
+        }
+        if (this.selectAllBtn) this.selectAllBtn.disabled = deletingCurrentSource || visibleCount === 0;
+        if (this.selectNoneBtn) this.selectNoneBtn.disabled = deletingCurrentSource || selectedCount === 0;
+        if (this.deleteSelectedBtn) {
+            this.deleteSelectedBtn.disabled = deletingCurrentSource || selectedCount === 0;
+            this.deleteSelectedBtn.setText(deletingCurrentSource
+                ? t('modal.imageBrowser.deletingSelected')
+                : t('modal.imageBrowser.deleteSelected'));
+        }
+        this.gridEl?.querySelectorAll<HTMLInputElement>('.image-browser-selection-checkbox')
+            .forEach((checkbox) => { checkbox.disabled = deletingCurrentSource; });
+    }
+
+    private retainValidSelections(source: BrowserSource) {
+        const validKeys = source === 'local'
+            ? this.orphanPaths ?? []
+            : this.hostedOrphanKeys ?? [];
+        this.batchSelection.retain(source, validKeys);
+    }
+
+    private selectAllVisibleImages() {
+        if (!this.isBatchSelectionAvailable()) return;
+        const keys = this.source === 'local'
+            ? this.filteredImages.map((file) => file.path)
+            : this.filteredHostedImages.map((image) => image.key);
+        this.batchSelection.selectAll(this.source, keys);
+        this.renderContent();
+    }
+
+    private clearCurrentSelection() {
+        this.batchSelection.clear(this.source);
+        this.renderContent();
+    }
+
+    private setItemSelected(source: BrowserSource, key: string, selected: boolean) {
+        this.batchSelection.setSelected(source, key, selected);
+        this.updateBatchToolbar();
+    }
+
+    private attachCardSelection(
+        cardEl: HTMLDivElement,
+        source: BrowserSource,
+        key: string,
+        name: string
+    ) {
+        const selected = this.batchSelection.isSelected(source, key);
+        cardEl.toggleClass('is-selected', selected);
+        const checkbox = cardEl.createEl('input', {
+            cls: 'image-browser-selection-checkbox image-browser-card-checkbox',
+            attr: {
+                type: 'checkbox',
+                'aria-label': t('modal.imageBrowser.selectImage', { name }),
+            },
+        });
+        checkbox.checked = selected;
+        checkbox.addEventListener('click', (event) => event.stopPropagation());
+        checkbox.addEventListener('change', () => {
+            this.setItemSelected(source, key, checkbox.checked);
+            cardEl.toggleClass('is-selected', checkbox.checked);
+        });
+    }
+
+    private confirmBatchDelete() {
+        if (!this.isBatchSelectionAvailable()) return;
+        const source = this.source;
+        const count = this.batchSelection.getCount(source);
+        if (count === 0) {
+            new Notice(t('modal.imageBrowser.noSelection'));
+            return;
+        }
+        new ConfirmDialog(this.app, {
+            title: source === 'local'
+                ? t('modal.imageBrowser.deleteLocalBatchTitle')
+                : t('modal.imageBrowser.deleteHostedBatchTitle'),
+            message: source === 'local'
+                ? t('modal.imageBrowser.deleteLocalBatchMessage', { count: String(count) })
+                : t('modal.imageBrowser.deleteHostedBatchMessage', { count: String(count) }),
+            confirmText: t('modal.imageBrowser.deleteSelected'),
+            onConfirm: () => this.deleteSelectedImages(source),
+        }).open();
+    }
+
+    private async deleteSelectedImages(source: BrowserSource) {
+        if (this.deletingBatchSource) return;
+        this.deletingBatchSource = source;
+        this.updateBatchToolbar();
+        const selectedKeys = new Set(this.batchSelection.getKeys(source));
+
+        try {
+            if (source === 'local') {
+                const selectedFiles = this.allImages.filter((file) => selectedKeys.has(file.path));
+                const result = await deleteBatchItems(selectedFiles, (file) =>
+                    trashLocalImage(this.app, file)
+                );
+                const deletedPaths = new Set(result.deleted.map((file) => file.path));
+                this.allImages = this.allImages.filter((file) => !deletedPaths.has(file.path));
+                this.orphanPaths = new Set(
+                    Array.from(this.orphanPaths ?? []).filter((path) => !deletedPaths.has(path))
+                );
+                this.batchSelection.remove('local', deletedPaths);
+                this.showBatchDeleteNotice(result.deleted.length, result.failed.length, 'local');
+            } else {
+                const config = this.getSelectedHostingConfig();
+                if (!config) throw new Error(t('modal.imageBrowser.noHosting'));
+                const uploader = createUploader(config, this.plugin.settings.uploadPathTemplate);
+                const selectedImages = this.hostedImages.filter((image) => selectedKeys.has(image.key));
+                const result = await deleteBatchItems(selectedImages, (image) =>
+                    uploader.deleteImage(image.key)
+                );
+                const deletedKeys = new Set(result.deleted.map((image) => image.key));
+                this.hostedImages = this.hostedImages.filter((image) => !deletedKeys.has(image.key));
+                this.hostedOrphanKeys = new Set(
+                    Array.from(this.hostedOrphanKeys ?? []).filter((key) => !deletedKeys.has(key))
+                );
+                this.batchSelection.remove('hosting', deletedKeys);
+                this.showBatchDeleteNotice(result.deleted.length, result.failed.length, 'hosting');
+            }
+        } catch (error) {
+            new Notice(t('modal.imageBrowser.batchDeleteFailed', {
+                error: error instanceof Error ? error.message : t('modal.imageBrowser.unknownError'),
+            }));
+        } finally {
+            this.deletingBatchSource = null;
+            if (this.source === source) this.applyFilterAndSort();
+            else this.updateBatchToolbar();
+        }
+    }
+
+    private showBatchDeleteNotice(deleted: number, failed: number, source: BrowserSource) {
+        if (failed > 0) {
+            new Notice(t('modal.imageBrowser.batchDeletePartial', {
+                deleted: String(deleted),
+                failed: String(failed),
+            }));
+            return;
+        }
+        new Notice(t(source === 'local'
+            ? 'modal.imageBrowser.localBatchDeleted'
+            : 'modal.imageBrowser.hostedBatchDeleted', {
+            count: String(deleted),
+        }));
     }
 
     private createCard(name: string, path: string, size: number): {

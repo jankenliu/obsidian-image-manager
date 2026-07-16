@@ -25,6 +25,9 @@ export interface ImageTreeRenderOptions<T> {
     forceExpanded: boolean;
     folderCountText: (count: number) => string;
     openItem: (item: T) => void;
+    isItemSelected?: (item: T) => boolean;
+    onItemSelectionChange?: (item: T, selected: boolean) => void;
+    selectionLabel?: (item: T) => string;
 }
 
 /** Build a directory tree while preserving the caller's item sort order. */
@@ -128,7 +131,27 @@ function renderItems<T>(
     options: ImageTreeRenderOptions<T>
 ): void {
     for (const item of items) {
-        const itemButton = parentEl.createEl('button', { cls: 'image-browser-tree-item' });
+        const rowEl = parentEl.createDiv({ cls: 'image-browser-tree-item-row' });
+        const selected = options.isItemSelected?.(item) ?? false;
+        if (options.isItemSelected && options.onItemSelectionChange) {
+            const checkbox = rowEl.createEl('input', {
+                cls: 'image-browser-selection-checkbox',
+                attr: {
+                    type: 'checkbox',
+                    'aria-label': options.selectionLabel?.(item) ?? options.getName(item),
+                },
+            });
+            checkbox.checked = selected;
+            checkbox.addEventListener('change', () => {
+                options.onItemSelectionChange?.(item, checkbox.checked);
+                itemButton.toggleClass('is-selected', checkbox.checked);
+            });
+        }
+        const itemButton = rowEl.createEl('button', {
+            cls: selected
+                ? 'image-browser-tree-item is-selected'
+                : 'image-browser-tree-item',
+        });
         itemButton.setAttribute('title', options.getPath(item));
         itemButton.createEl('img', {
             cls: 'image-browser-tree-thumbnail',

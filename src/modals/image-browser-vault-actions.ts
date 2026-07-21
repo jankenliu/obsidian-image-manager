@@ -1,6 +1,6 @@
 export type ImageBrowserVaultActionSource = 'local' | 'hosting';
 
-/** Keep vault-wide actions local-only and prevent concurrent execution. */
+/** Keep actions local-only and prevent duplicate clicks within this modal. */
 export class ImageBrowserVaultActionState {
     private running = false;
 

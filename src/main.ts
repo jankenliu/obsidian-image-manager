@@ -651,7 +651,10 @@ export default class ImageManagerPlugin extends Plugin {
         }
     }
 
-    /** Reorganize image references across every Markdown note in the vault. */
+    /**
+     * Reorganize image references across every Markdown note in the vault.
+     * The plugin-level guard also protects calls initiated by separate modal instances.
+     */
     async reorganizeEntireVault() {
         if (this.isReorganizing) return;
 
@@ -678,7 +681,10 @@ export default class ImageManagerPlugin extends Plugin {
         }
     }
 
-    /** Upload every local image, replace its references, and optionally remove its local copy. */
+    /**
+     * Upload every local image, replace its references, and optionally remove its local copy.
+     * The plugin-level guard also protects calls initiated by separate modal instances.
+     */
     async uploadEntireVault() {
         if (this.isUploadingVault) return;
 

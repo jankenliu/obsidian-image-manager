@@ -1,4 +1,4 @@
-/** 支持的图片 MIME 类型映射 */
+/** Supported image MIME type mappings. */
 export const IMAGE_MIME_TYPES: Record<string, string> = {
     png: 'image/png',
     jpg: 'image/jpeg',
@@ -13,9 +13,5 @@ export const IMAGE_MIME_TYPES: Record<string, string> = {
     avif: 'image/avif',
 };
 
-/** 正则：标准 Markdown 图片引用 */
-export const MD_IMAGE_REGEX = /!\[([^\]]*)\]\(([^)]+)\)/g;
-
-/** 正则：Obsidian Wiki 图片引用 */
+/** Obsidian Wiki image embeds. Markdown image embeds use the balanced parser. */
 export const WIKI_IMAGE_REGEX = /!\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/g;
-

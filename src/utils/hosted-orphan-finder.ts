@@ -1,7 +1,7 @@
 import type { App } from 'obsidian';
 import type { HostedImage } from '../types';
-import { MD_IMAGE_REGEX } from '../constants';
 import { extractHtmlImageReferences } from './html-image-reference';
+import { extractMarkdownImageReferences } from './markdown-image-reference';
 
 export interface HostedImageReferencingNote {
     path: string;
@@ -92,10 +92,8 @@ export async function findOrphanHostedImages(app: App, images: HostedImage[]): P
 
 function extractExternalImageReferences(text: string): ExternalImageReference[] {
     const references: ExternalImageReference[] = [];
-    const imagePattern = new RegExp(MD_IMAGE_REGEX.source, 'g');
-    let match: RegExpExecArray | null;
-    while ((match = imagePattern.exec(text)) !== null) {
-        references.push({ value: match[2] ?? '', index: match.index });
+    for (const reference of extractMarkdownImageReferences(text)) {
+        references.push({ value: reference.destination, index: reference.index });
     }
     for (const reference of extractHtmlImageReferences(text)) {
         references.push({ value: reference.src, index: reference.index });

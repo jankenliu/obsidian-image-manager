@@ -1,7 +1,8 @@
 import { App, TFile, normalizePath } from 'obsidian';
 import { ImageScanner } from './image-scanner';
-import { MD_IMAGE_REGEX, WIKI_IMAGE_REGEX } from '../constants';
+import { WIKI_IMAGE_REGEX } from '../constants';
 import { extractHtmlImageReferences } from './html-image-reference';
+import { extractMarkdownImageReferences } from './markdown-image-reference';
 
 export interface OrphanResult {
     orphans: TFile[];
@@ -74,11 +75,9 @@ export class OrphanFinder {
 
         // Check markdown references
         let match: RegExpExecArray | null;
-        MD_IMAGE_REGEX.lastIndex = 0;
-        while ((match = MD_IMAGE_REGEX.exec(text)) !== null) {
-            const path = match[2]?.trim();
-            if (path && this.matchesFilePath(path, file, notePath)) {
-                result.push(this.getLineNumber(text, match.index));
+        for (const reference of extractMarkdownImageReferences(text)) {
+            if (this.matchesFilePath(reference.destination, file, notePath)) {
+                result.push(this.getLineNumber(text, reference.index));
             }
         }
 
@@ -180,13 +179,11 @@ export class OrphanFinder {
         let match: RegExpExecArray | null;
 
         // Reset lastIndex
-        MD_IMAGE_REGEX.lastIndex = 0;
         WIKI_IMAGE_REGEX.lastIndex = 0;
 
         // Markdown references: ![alt](path)
-        while ((match = MD_IMAGE_REGEX.exec(text)) !== null) {
-            const path = match[2]?.trim();
-            if (path) this.addLocalReference(path, result, notePath);
+        for (const reference of extractMarkdownImageReferences(text)) {
+            this.addLocalReference(reference.destination, result, notePath);
         }
 
         // Wiki references: ![[path]] or ![[path|alt]]

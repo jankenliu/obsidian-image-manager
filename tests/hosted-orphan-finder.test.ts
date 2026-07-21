@@ -46,6 +46,28 @@ describe('Hosted orphan finder', () => {
         await expect(findOrphanHostedImages(app, [used, orphan])).resolves.toEqual([orphan]);
     });
 
+    it('recognizes a hosted Markdown image URL containing parentheses', async () => {
+        const notes = [{ path: 'one.md' }] as TFile[];
+        const image = createImage(
+            'images/photo(copy).png',
+            'https://cdn.example.com/images/photo(copy).png'
+        );
+        const app = {
+            vault: {
+                getMarkdownFiles: () => notes,
+                cachedRead: vi.fn(() => Promise.resolve(
+                    '![photo](https://cdn.example.com/images/photo(copy).png)'
+                )),
+            },
+        } as unknown as App;
+
+        await expect(findOrphanHostedImages(app, [image])).resolves.toEqual([]);
+        expect(findHostedImageReferenceLines(
+            '![photo](https://cdn.example.com/images/photo(copy).png)',
+            image.url
+        )).toEqual([0]);
+    });
+
     it('treats an HTML image tag as a hosted image reference', async () => {
         const notes = [{ path: 'one.md' }] as TFile[];
         const app = {

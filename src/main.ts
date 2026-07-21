@@ -652,6 +652,8 @@ export default class ImageManagerPlugin extends Plugin {
 
     /** Reorganize image references across every Markdown note in the vault. */
     async reorganizeEntireVault() {
+        if (this.isReorganizing) return;
+
         const reorganizer = new ImageReorganizer(this.app, this.settings, this.resolveImagePath.bind(this));
         this.isReorganizing = true;
         try {

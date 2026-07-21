@@ -83,4 +83,29 @@ describe('Vault reorganization coordinator', () => {
         expect((plugin as unknown as { isReorganizing: boolean }).isReorganizing).toBe(false);
         expect(mocks.trashEmptyDirectories).not.toHaveBeenCalled();
     });
+
+    it('does not start a second vault reorganization while one is running', async () => {
+        let completeReorganization: ((value: {
+            notes: number;
+            moved: number;
+            skipped: number;
+            failed: number;
+            movedParentPaths: string[];
+        }) => void) | undefined;
+        const completedResult = { notes: 1, moved: 0, skipped: 0, failed: 0, movedParentPaths: [] };
+        mocks.reorganizeFolderWithCleanupInfo.mockImplementationOnce(() => new Promise((resolve) => {
+            completeReorganization = resolve;
+        })).mockResolvedValue(completedResult);
+        mocks.trashEmptyDirectories.mockResolvedValue({ trashed: [], failed: 0 });
+        const plugin = createPlugin();
+
+        const firstRun = plugin.reorganizeEntireVault();
+        const secondRun = plugin.reorganizeEntireVault();
+
+        expect(mocks.reorganizeFolderWithCleanupInfo).toHaveBeenCalledTimes(1);
+
+        completeReorganization?.(completedResult);
+        await firstRun;
+        await secondRun;
+    });
 });

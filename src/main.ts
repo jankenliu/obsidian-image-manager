@@ -731,9 +731,10 @@ export default class ImageManagerPlugin extends Plugin {
                     uploaded++;
 
                     if (!this.settings.keepLocalCopy) {
+                        const parentPath = image.parent?.path;
                         await this.app.fileManager.trashFile(image);
                         trashed++;
-                        if (image.parent?.path) affectedParentPaths.push(image.parent.path);
+                        if (parentPath) affectedParentPaths.push(parentPath);
                     }
                 } catch (e) {
                     failed++;

@@ -178,6 +178,19 @@ describe('Vault upload coordinator', () => {
         expect(mocks.trashEmptyDirectories).toHaveBeenCalledWith((plugin as unknown as { app: unknown }).app, []);
     });
 
+    it('cleans the original parent when trashing clears the image parent', async () => {
+        const plugin = createPlugin();
+        const image = createImage('attachments/a.png');
+        mocks.images = [image];
+        mocks.upload.mockResolvedValue({ success: true, url: 'https://host/a.png' });
+        (plugin as unknown as { replaceReferenceInNote: () => Promise<void> }).replaceReferenceInNote = vi.fn(async () => undefined);
+        mocks.trashFile.mockImplementation(async (file: { parent: unknown }) => { file.parent = null; });
+
+        await plugin.uploadEntireVault();
+
+        expect(mocks.trashEmptyDirectories).toHaveBeenCalledWith((plugin as unknown as { app: unknown }).app, ['attachments']);
+    });
+
     it('does not start a second vault upload while one is running', async () => {
         const plugin = createPlugin();
         mocks.images = [createImage('attachments/a.png')];

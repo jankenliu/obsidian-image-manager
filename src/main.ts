@@ -26,6 +26,7 @@ export default class ImageManagerPlugin extends Plugin {
     batchRename: BatchRename;
     private emptyFolderCleaner: EmptyFolderCleaner;
     private isReorganizing = false;
+    private isUploadingVault = false;
     async onload() {
         await this.loadSettings();
         setLocale(this.settings.locale);
@@ -674,6 +675,83 @@ export default class ImageManagerPlugin extends Plugin {
             new Notice(t('notice.reorganizeFailed', { error: e instanceof Error ? e.message : 'Unknown error' }));
         } finally {
             this.isReorganizing = false;
+        }
+    }
+
+    /** Upload every local image, replace its references, and optionally remove its local copy. */
+    async uploadEntireVault() {
+        if (this.isUploadingVault) return;
+
+        if (!this.settings.reorganizeConvertFormat) {
+            new Notice(t('settings.hostingDisabledByFormat'));
+            return;
+        }
+
+        if (!this.settings.autoReplaceAfterUpload) {
+            new Notice(t('notice.autoReplaceRequiredForVaultUpload'));
+            return;
+        }
+
+        const hostingConfig = this.getDefaultHostingConfig();
+        if (!hostingConfig) {
+            new Notice(t('notice.noHostingConfig'));
+            return;
+        }
+
+        const scanner = new ImageScanner(this.app, this.settings.supportedExtensions);
+        const images = scanner.getAllImages();
+        if (images.length === 0) {
+            new Notice(t('notice.noImagesToUpload'));
+            return;
+        }
+
+        this.isUploadingVault = true;
+        let uploaded = 0;
+        let failed = 0;
+        let trashed = 0;
+        const affectedParentPaths: string[] = [];
+
+        try {
+            for (const image of images) {
+                try {
+                    let data = await this.app.vault.readBinary(image);
+                    if (this.settings.autoCompress) {
+                        const result = await this.imageOptimizer.compressImage(image, this.settings.compressQuality);
+                        data = result.data;
+                    }
+
+                    const uploader = createUploader(hostingConfig, this.settings.uploadPathTemplate);
+                    const result = await uploader.upload(data, image.name, { sourcePath: image.path });
+                    if (!result.success || !result.url) {
+                        failed++;
+                        continue;
+                    }
+
+                    await this.replaceReferenceInNote(image, result.url);
+                    uploaded++;
+
+                    if (!this.settings.keepLocalCopy) {
+                        await this.app.fileManager.trashFile(image);
+                        trashed++;
+                        if (image.parent?.path) affectedParentPaths.push(image.parent.path);
+                    }
+                } catch (e) {
+                    failed++;
+                    console.error(`[ImageManager] Failed to upload ${image.path}:`, e);
+                }
+            }
+
+            const cleanup = this.settings.keepLocalCopy
+                ? { trashed: [], failed: 0 }
+                : await trashEmptyDirectories(this.app, affectedParentPaths);
+            new Notice(t('notice.vaultUploadDone', {
+                success: String(uploaded),
+                failed: String(failed),
+                trashed: String(trashed),
+                directories: String(cleanup.trashed.length),
+            }));
+        } finally {
+            this.isUploadingVault = false;
         }
     }
 

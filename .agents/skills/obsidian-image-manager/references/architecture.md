@@ -17,7 +17,8 @@ main.ts（入口）
 │   ├── image-scanner.ts
 │   ├── orphan-finder.ts ← ref-converter.ts
 │   ├── image-optimizer.ts
-│   ├── image-reorganizer.ts ← ref-converter.ts + path-utils.ts
+│   ├── image-name-template.ts（共享图片命名模板）
+│   ├── image-reorganizer.ts ← image-name-template.ts + ref-converter.ts + path-utils.ts
 │   ├── batch-rename.ts ← ref-converter.ts
 │   └── path-utils.ts
 ├── types.ts（类型定义）
@@ -56,6 +57,7 @@ main.ts（入口）
 ClipboardEvent/DragEvent
   → handleImagePaste/handleImageDrop（返回 boolean）
   → processImageFiles（逐文件处理）
+    → image-name-template（会话级 pasteCounter + 模板渲染/名称清理）
     → ImageNamePromptModal（可选）
     → savePastedImage
       → resolveImagePath（模板变量：{noteName}, {notePath}, {filename}, {year}, {month}, {day}, {timestamp}）
@@ -84,16 +86,18 @@ doUpload(file, config)
 ```
 reorganizeNote(file)
   → ImageReorganizer.reorganizeNote
-    → parseReferences（解析所有引用）
-    → 逐引用处理（反向遍历）：
-      → 跳过：外部 URL、Wiki 引用（可配）
-      → resolveImageFromRef（解析图片文件）
-      → resolveImagePath（计算目标路径）
-      → vault.rename（移动文件）
-      → 更新引用格式
-    → vault.process（更新笔记内容）
-    → updateOtherNotes（更新其他笔记中的引用）
+    → 创建任务级上下文（单篇或整个文件夹各一个，counter 从 0 开始）
+    → metadataCache 优先解析引用，歧义时安全跳过
+    → 按源路径去重并记录每张图片首次分配时的 namingTime
+    → image-name-template（完整 imageNamingTemplate + 任务级 counter）
+    → resolveImagePath（使用最终候选文件名计算目标目录）
+    → 检查 Vault 内存映射 + adapter + reservedPaths，预留目标路径
+    → 移动前复检；rename 竞态冲突时继续分配，其他失败仅隔离当前图片
+    → vault.rename（每张不同图片最多成功移动或重命名一次）
+    → vault.process（按旧路径 → 最终路径映射更新范围内及其他笔记）
 ```
+
+粘贴/拖放与资源整理共享 `image-name-template.ts` 的模板渲染和文件名清理规则，但计数器生命周期不同：`pasteCounter` 在插件会话内持续递增；每次单篇整理或文件夹整理创建独立任务上下文，文件夹内所有笔记共享同一个从 `0` 开始的计数器。
 
 ## 设置门控逻辑
 
@@ -116,7 +120,8 @@ reorganizeConvertFormat
 | `main.ts` | 命令注册、事件编排、粘贴/拖放 | 具体业务逻辑（委托给 utils） |
 | `settings.ts` | 设置面板 UI 渲染 | 设置值的持久化（main.ts 处理） |
 | `ref-converter.ts` | 引用解析、格式转换 | 文件移动、引用替换（reorganizer 处理） |
-| `image-reorganizer.ts` | 文件移动 + 引用更新 | 压缩、上传 |
+| `image-name-template.ts` | 图片命名模板渲染、文件名清理、冲突后缀生成 | 计数器生命周期、路径占用检查 |
+| `image-reorganizer.ts` | 任务级名称与路径规划、文件移动/重命名、失败隔离、跨笔记引用更新 | 压缩、上传 |
 | `batch-rename.ts` | 重命名 + 引用同步 | 文件移动、格式转换 |
 | `uploaders/` | 图床上传 | 引用替换（main.ts 处理） |
 | `image-optimizer.ts` | 压缩、格式转换 | 文件保存（调用者处理） |

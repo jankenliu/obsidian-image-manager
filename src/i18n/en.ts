@@ -79,7 +79,7 @@ export const en: Record<string, string> = {
     'notice.batchUploadDone': 'Batch upload complete: {success}/{total} succeeded.',
     'notice.renameSuccess': 'Renamed "{old}" to "{new}", updated {notes} note(s).',
     'notice.renameFailed': 'Rename failed: {error}',
-    'notice.reorganizeDone': 'Reorganized {note} note(s), moved {moved} image(s), skipped {skipped}',
+    'notice.reorganizeDone': 'Reorganized {note} note(s), moved or renamed {moved} image(s), skipped {skipped}, failed {failed}',
     'notice.reorganizeFailed': 'Reorganize failed: {error}',
     'settings.useMarkdownFormat': 'Use Markdown standard format',
     'settings.useMarkdownFormatDesc': 'When enabled, pasted images use standard Markdown format (![alt](image.png)) and reorganizing converts Wiki to Markdown. When disabled, pasted images use Obsidian default Wiki format (![[image.png]])',
@@ -225,7 +225,7 @@ export const en: Record<string, string> = {
     'settings.imageNaming': 'Image Naming',
     'settings.imageNamingTemplate': 'Naming template',
     'settings.imageNamingTemplateDesc':
-        'Template for pasted/dropped image names. Variables: {date}, {time}, {timestamp}, {counter}, {year}, {month}, {day}',
+        'Template for image names when pasting, dropping, or reorganizing. Variables: {date}, {time}, {timestamp}, {counter}, {year}, {month}, {day}',
     'settings.promptImageName': 'Prompt for image name',
     'settings.promptImageNameDesc': 'Show a name input dialog when pasting/dropping images',
     'settings.enableImageBrowser': 'Enable image browser',

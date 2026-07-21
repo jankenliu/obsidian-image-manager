@@ -78,7 +78,7 @@ export const zh: Record<string, string> = {
     'notice.batchUploadDone': '批量上传完成：{success}/{total} 成功。',
     'notice.renameSuccess': '已将 "{old}" 重命名为 "{new}"，更新了 {notes} 个笔记。',
     'notice.renameFailed': '重命名失败：{error}',
-    'notice.reorganizeDone': '已整理 {note} 篇笔记，移动 {moved} 张图片，跳过 {skipped} 张',
+    'notice.reorganizeDone': '已整理 {note} 篇笔记，移动或重命名 {moved} 张图片，跳过 {skipped} 张，失败 {failed} 张',
     'notice.reorganizeFailed': '整理失败：{error}',
     'settings.useMarkdownFormat': '使用 Markdown 标准格式',
     'settings.useMarkdownFormatDesc': '开启后，粘贴图片使用标准 Markdown 格式（![alt](image.png)），整理图片时将 Wiki 格式转为 Markdown；关闭后，粘贴图片使用 Obsidian 默认的 Wiki 格式（![[image.png]]）',
@@ -222,7 +222,7 @@ export const zh: Record<string, string> = {
     'settings.imageNaming': '图片命名',
     'settings.imageNamingTemplate': '命名模板',
     'settings.imageNamingTemplateDesc':
-        '粘贴/拖放图片时的命名模板。变量：{date}, {time}, {timestamp}, {counter}, {year}, {month}, {day}',
+        '粘贴、拖放或整理图片资源时的命名模板。变量：{date}, {time}, {timestamp}, {counter}, {year}, {month}, {day}',
     'settings.promptImageName': '提示输入图片名称',
     'settings.promptImageNameDesc': '粘贴/拖放图片时弹出名称输入框',
     'settings.enableImageBrowser': '启用图片浏览器',

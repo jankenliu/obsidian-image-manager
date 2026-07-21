@@ -34,12 +34,19 @@ handleImagePaste/handleImageDrop
   → 过滤 image/* 类型
   → processImageFiles（逐文件处理）
     → mimeToExt（MIME → 扩展名）
-    → generateFileName（模板变量替换）
+    → generateFileName（调用共享命名模板工具）
     → 可选 ImageNamePromptModal（promptImageName=true）
     → savePastedImage
 ```
 
 ## 文件名生成：`generateFileName`
+
+粘贴/拖放与资源整理共同调用 `src/utils/image-name-template.ts`。模板变量替换、扩展名规范化和文件名清理只有一份实现；手动输入名称时只调用 `sanitizeImageFileName`，不会把用户输入中的 `{date}` 等文本当成模板再次渲染。
+
+两条流程的计数器生命周期不同：
+
+- 粘贴/拖放使用插件实例上的 `pasteCounter`，从插件加载时的 `0` 开始，在整个插件会话内持续递增。
+- 每次单篇资源整理或文件夹资源整理创建独立任务上下文，`{counter}` 从 `0` 开始；同一次文件夹整理中的全部笔记共享该计数器。
 
 模板变量（`imageNamingTemplate` 设置）：
 
@@ -51,11 +58,11 @@ handleImagePaste/handleImageDrop
 | `{year}` | `2026` | 年 |
 | `{month}` | `06` | 月（补零） |
 | `{day}` | `07` | 日（补零） |
-| `{counter}` | `0`, `1`, `2`... | 会话内自增计数器 |
+| `{counter}` | `0`, `1`, `2`... | 粘贴/拖放时在插件会话内自增 |
 
 默认模板：`image-{timestamp}`
 
-### 文件名清理：`sanitizeFileName`
+### 文件名清理：`sanitizeImageFileName`
 
 1. 去除用户输入的扩展名
 2. 空格 → 连字符
@@ -157,7 +164,7 @@ editor.replaceSelection(ref);
 
 | 设置 | 默认值 | 影响 |
 |------|--------|------|
-| `imageNamingTemplate` | `image-{timestamp}` | 文件名模板 |
+| `imageNamingTemplate` | `image-{timestamp}` | 粘贴、拖放与资源整理共享的文件名模板 |
 | `promptImageName` | `false` | 是否弹窗让用户输入名称 |
 | `imagePathTemplate` | `attachments` | 存储路径模板 |
 | `imagePathBase` | `note` | 路径基准（vault/note） |

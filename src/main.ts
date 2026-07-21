@@ -615,6 +615,7 @@ export default class ImageManagerPlugin extends Plugin {
                     note: '1',
                     moved: String(result.moved),
                     skipped: String(result.skipped),
+                    failed: String(result.failed),
                 })
             );
         } catch (e) {
@@ -634,6 +635,7 @@ export default class ImageManagerPlugin extends Plugin {
                     note: String(result.notes),
                     moved: String(result.moved),
                     skipped: String(result.skipped),
+                    failed: String(result.failed),
                 })
             );
         } catch (e) {

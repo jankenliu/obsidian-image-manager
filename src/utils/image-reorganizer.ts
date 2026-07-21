@@ -16,7 +16,11 @@ export interface ReorganizeResult {
     moved: number;
     skipped: number;
     failed: number;
-    movedParentPaths: Set<string>;
+}
+
+export interface ReorganizeFolderCleanupResult extends ReorganizeResult {
+    notes: number;
+    movedParentPaths: readonly string[];
 }
 
 interface PlannedImage {
@@ -36,6 +40,11 @@ interface ReorganizeContext {
     moved: number;
     skipped: number;
     failed: number;
+    movedParentPaths: Set<string>;
+}
+
+interface ReorganizeNotesResult extends ReorganizeResult {
+    notes: number;
     movedParentPaths: Set<string>;
 }
 
@@ -86,7 +95,6 @@ export class ImageReorganizer {
             moved: result.moved,
             skipped: result.skipped,
             failed: result.failed,
-            movedParentPaths: result.movedParentPaths,
         };
     }
 
@@ -95,11 +103,40 @@ export class ImageReorganizer {
         folderPath: string,
         convertFormat?: ReferenceFormat
     ): Promise<ReorganizeResult & { notes: number }> {
+        const result = await this.reorganizeNotes(
+            this.getFolderNoteFiles(folderPath),
+            convertFormat
+        );
+        return {
+            moved: result.moved,
+            skipped: result.skipped,
+            failed: result.failed,
+            notes: result.notes,
+        };
+    }
+
+    async reorganizeFolderWithCleanupInfo(
+        folderPath: string,
+        convertFormat?: ReferenceFormat
+    ): Promise<ReorganizeFolderCleanupResult> {
+        const result = await this.reorganizeNotes(
+            this.getFolderNoteFiles(folderPath),
+            convertFormat
+        );
+        return {
+            moved: result.moved,
+            skipped: result.skipped,
+            failed: result.failed,
+            notes: result.notes,
+            movedParentPaths: Object.freeze([...result.movedParentPaths]),
+        };
+    }
+
+    private getFolderNoteFiles(folderPath: string): TFile[] {
         const folderPrefix = folderPath ? `${folderPath}/` : '';
-        const noteFiles = this.app.vault.getMarkdownFiles().filter((file) =>
+        return this.app.vault.getMarkdownFiles().filter((file) =>
             folderPath === '' || file.path === folderPath || file.path.startsWith(folderPrefix)
         );
-        return this.reorganizeNotes(noteFiles, convertFormat);
     }
 
     private createContext(): ReorganizeContext {
@@ -117,7 +154,7 @@ export class ImageReorganizer {
     private async reorganizeNotes(
         noteFiles: TFile[],
         convertFormat?: ReferenceFormat
-    ): Promise<ReorganizeResult & { notes: number }> {
+    ): Promise<ReorganizeNotesResult> {
         const context = this.createContext();
         const scopePaths = new Set(noteFiles.map((file) => file.path));
         const touchedNotes = new Set<string>();

@@ -188,7 +188,7 @@ describe('图片资源整理命名', () => {
             'images/shared image.png',
             'notes/note.md'
         );
-        expect(result).toMatchObject({ moved: 1, skipped: 0, failed: 0 });
+        expect(result).toEqual({ moved: 1, skipped: 0, failed: 0 });
         expect(harness.files.get('images/shared image.png')).toBe(rootImage);
         expect(harness.files.has('notes/images/shared image.png')).toBe(false);
         expect(harness.files.get('notes/attachments/selected-0.png')).toBe(linkedImage);
@@ -220,7 +220,7 @@ describe('图片资源整理命名', () => {
             'shared.png',
             'notes/note.md'
         );
-        expect(result).toMatchObject({ moved: 0, skipped: 1, failed: 0 });
+        expect(result).toEqual({ moved: 0, skipped: 1, failed: 0 });
         expect(harness.rename).not.toHaveBeenCalled();
         expect(harness.files.get('assets/shared.png')).toBe(first);
         expect(harness.files.get('other/shared.png')).toBe(second);
@@ -246,7 +246,7 @@ describe('图片资源整理命名', () => {
             'markdown'
         );
 
-        expect(result).toMatchObject({ moved: 0, skipped: 1, failed: 0 });
+        expect(result).toEqual({ moved: 0, skipped: 1, failed: 0 });
         expect(harness.rename).not.toHaveBeenCalled();
         expect(harness.files.get('notes/shared.png')).toBe(noteImage);
         expect(harness.files.get('other/shared.png')).toBe(otherImage);
@@ -274,7 +274,7 @@ describe('图片资源整理命名', () => {
             'markdown'
         );
 
-        expect(result).toMatchObject({ moved: 0, skipped: 1, failed: 0 });
+        expect(result).toEqual({ moved: 0, skipped: 1, failed: 0 });
         expect(harness.rename).not.toHaveBeenCalled();
         expect(harness.files.has('assets/shared.png')).toBe(true);
         expect(harness.contents.get('notes/note.md')).toBe('![图片](shared.png)');
@@ -297,7 +297,7 @@ describe('图片资源整理命名', () => {
             'markdown'
         );
 
-        expect(result).toMatchObject({ moved: 0, skipped: 1, failed: 0 });
+        expect(result).toEqual({ moved: 0, skipped: 1, failed: 0 });
         expect(harness.rename).not.toHaveBeenCalled();
         expect(harness.files.get('other/shared.png')).toBe(otherImage);
         expect(harness.contents.get('notes/note.md')).toBe(
@@ -332,7 +332,7 @@ describe('图片资源整理命名', () => {
                 'markdown'
             );
 
-            expect(result).toMatchObject({ moved: 1, skipped: 0, failed: 0 });
+            expect(result).toEqual({ moved: 1, skipped: 0, failed: 0 });
             expect(harness.files.has(
                 `notes/attachments/base-${initialTime.getTime()}-1.png`
             )).toBe(true);
@@ -363,7 +363,7 @@ describe('图片资源整理命名', () => {
         );
 
         const competingFile = harness.files.get('notes/attachments/photo.png');
-        expect(result).toMatchObject({ moved: 1, skipped: 0, failed: 0 });
+        expect(result).toEqual({ moved: 1, skipped: 0, failed: 0 });
         expect(harness.rename).toHaveBeenCalledTimes(2);
         expect(competingFile).toBeDefined();
         expect(competingFile).not.toBe(sourceImage);
@@ -392,7 +392,7 @@ describe('图片资源整理命名', () => {
             'markdown'
         );
 
-        expect(result).toMatchObject({ moved: 1, skipped: 0, failed: 0 });
+        expect(result).toEqual({ moved: 1, skipped: 0, failed: 0 });
         expect(harness.contents.get('notes/note.md')).toBe(
             '![新说明](attachments/image-0.png)'
         );
@@ -416,7 +416,7 @@ describe('图片资源整理命名', () => {
             harness.files.get('notes/note.md')!
         );
 
-        expect(result).toMatchObject({ moved: 1, skipped: 0, failed: 0 });
+        expect(result).toEqual({ moved: 1, skipped: 0, failed: 0 });
         expect(harness.contents.get('notes/note.md')).toBe(
             '![[image-0.png|新别名]]'
         );
@@ -441,7 +441,7 @@ describe('图片资源整理命名', () => {
             'markdown'
         );
 
-        expect(result).toMatchObject({ moved: 1, skipped: 0, failed: 0 });
+        expect(result).toEqual({ moved: 1, skipped: 0, failed: 0 });
         expect(harness.contents.get('notes/note.md')).toBe(
             '![新别名](attachments/image-0.png)'
         );
@@ -463,7 +463,7 @@ describe('图片资源整理命名', () => {
             'markdown'
         );
 
-        expect(result).toMatchObject({ moved: 1, skipped: 0, failed: 0 });
+        expect(result).toEqual({ moved: 1, skipped: 0, failed: 0 });
         expect(harness.rename).toHaveBeenCalledTimes(1);
         expect(harness.files.has('notes/attachments/image-0.png')).toBe(true);
         expect(harness.contents.get('notes/note.md')).toBe(
@@ -531,8 +531,7 @@ describe('图片资源整理命名', () => {
             'markdown'
         );
 
-        expect(result).toMatchObject({ moved: 0, skipped: 0, failed: 0 });
-        expect(result.movedParentPaths).toEqual(new Set());
+        expect(result).toEqual({ moved: 0, skipped: 0, failed: 0 });
         expect(harness.rename).not.toHaveBeenCalled();
         expect(harness.contents.get('notes/note.md')).toBe(
             '![封面](attachments/image-1.png)'
@@ -575,7 +574,7 @@ describe('图片资源整理命名', () => {
             'markdown'
         );
 
-        expect(result).toMatchObject({ moved: 2, skipped: 0, failed: 0 });
+        expect(result).toEqual({ moved: 2, skipped: 0, failed: 0 });
         expect(harness.files.has('notes/attachments/photo.png')).toBe(true);
         expect(harness.files.has('notes/attachments/photo-1.png')).toBe(true);
     });
@@ -599,7 +598,7 @@ describe('图片资源整理命名', () => {
             'markdown'
         );
 
-        expect(result).toMatchObject({ moved: 0, skipped: 0, failed: 0 });
+        expect(result).toEqual({ moved: 0, skipped: 0, failed: 0 });
         expect(harness.rename).not.toHaveBeenCalled();
         expect(harness.contents.get('notes/note.md')).toBe(
             '![封面](attachments/image-0.png)'
@@ -621,8 +620,7 @@ describe('图片资源整理命名', () => {
 
         const result = await reorganizer.reorganizeFolder('notes', 'markdown');
 
-        expect(result).toMatchObject({ moved: 2, skipped: 0, failed: 0, notes: 2 });
-        expect(result.movedParentPaths).toEqual(new Set(['assets']));
+        expect(result).toEqual({ moved: 2, skipped: 0, failed: 0, notes: 2 });
         expect(harness.files.has('notes/attachments/image-0.png')).toBe(true);
         expect(harness.files.has('notes/attachments/image-1.png')).toBe(true);
     });
@@ -666,8 +664,7 @@ describe('图片资源整理命名', () => {
             'markdown'
         );
 
-        expect(result).toMatchObject({ moved: 1, skipped: 0, failed: 1 });
-        expect(result.movedParentPaths).toEqual(new Set(['assets']));
+        expect(result).toEqual({ moved: 1, skipped: 0, failed: 1 });
         expect(harness.contents.get('notes/note.md')).toContain('![失败](../failed/a.png)');
         expect(harness.contents.get('notes/note.md')).toContain(
             '![成功](attachments/image-1.png)'
@@ -714,46 +711,38 @@ describe('图片资源整理命名', () => {
 
         const result = await reorganizer.reorganizeNote(harness.files.get('notes/note.md')!);
 
-        expect(result).toMatchObject({ moved: 0, skipped: 1, failed: 0 });
+        expect(result).toEqual({ moved: 0, skipped: 1, failed: 0 });
         expect(harness.rename).not.toHaveBeenCalled();
         expect(harness.contents.get('notes/note.md')).toBe('![[old.png|别名]]');
     });
 
-    it('仅在图片实际移动成功后报告其原父目录', async () => {
+    it('全库清理入口仅报告成功移动的非根目录，并返回不可变副本', async () => {
         const harness = createHarness({
-            'notes/note.md': '![图片](../assets/old.png)',
-            'assets/old.png': null,
+            'notes/a.md': '![失败](../failed/a.png)',
+            'notes/b.md': '![成功](../assets/b.png)',
+            'failed/a.png': null,
+            'assets/b.png': null,
         });
+        harness.failRenameFrom.add('failed/a.png');
         const reorganizer = new ImageReorganizer(
             harness.app,
             createSettings({ imageNamingTemplate: 'image-{counter}' }),
             resolveImagePath
         );
 
-        const result = await reorganizer.reorganizeNote(
-            harness.files.get('notes/note.md')!,
+        const result = await reorganizer.reorganizeFolderWithCleanupInfo(
+            'notes',
             'markdown'
         );
 
-        expect(result.movedParentPaths).toEqual(new Set(['assets']));
-    });
-
-    it('不报告 Vault 根目录作为已移动图片的父目录', async () => {
-        const harness = createHarness({
-            'notes/note.md': '![图片](old.png)',
-            'old.png': null,
+        expect(result).toEqual({
+            moved: 1,
+            skipped: 0,
+            failed: 1,
+            notes: 2,
+            movedParentPaths: ['assets'],
         });
-        const reorganizer = new ImageReorganizer(
-            harness.app,
-            createSettings({ imageNamingTemplate: 'image-{counter}' }),
-            resolveImagePath
-        );
-
-        const result = await reorganizer.reorganizeNote(
-            harness.files.get('notes/note.md')!,
-            'markdown'
-        );
-
-        expect(result.movedParentPaths).toEqual(new Set());
+        expect(Object.isFrozen(result.movedParentPaths)).toBe(true);
+        expect(() => (result.movedParentPaths as string[]).push('mutated')).toThrow();
     });
 });

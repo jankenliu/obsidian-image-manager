@@ -95,6 +95,37 @@ describe('Vault upload coordinator', () => {
         expect(mocks.notices).toContain('notice.autoReplaceRequiredForVaultUpload');
     });
 
+    it('stops before uploading when hosting features are disabled', async () => {
+        const plugin = createPlugin();
+        plugin.settings.reorganizeConvertFormat = false;
+        mocks.images = [createImage('attachments/a.png')];
+
+        await plugin.uploadEntireVault();
+
+        expect(mocks.upload).not.toHaveBeenCalled();
+        expect(mocks.notices).toContain('settings.hostingDisabledByFormat');
+    });
+
+    it('stops before uploading when no hosting configuration is enabled', async () => {
+        const plugin = createPlugin();
+        plugin.settings.hostingConfigs = [{ id: 'disabled', enabled: false }] as never;
+        mocks.images = [createImage('attachments/a.png')];
+
+        await plugin.uploadEntireVault();
+
+        expect(mocks.upload).not.toHaveBeenCalled();
+        expect(mocks.notices).toContain('notice.noHostingConfig');
+    });
+
+    it('stops before uploading when the vault has no local images', async () => {
+        const plugin = createPlugin();
+
+        await plugin.uploadEntireVault();
+
+        expect(mocks.upload).not.toHaveBeenCalled();
+        expect(mocks.notices).toContain('notice.noImagesToUpload');
+    });
+
     it('uploads, replaces references, then trashes successful images and cleans their parents', async () => {
         const plugin = createPlugin();
         const image = createImage('attachments/a.png');
@@ -111,6 +142,22 @@ describe('Vault upload coordinator', () => {
         expect(mocks.trashFile).toHaveBeenCalledWith(image);
         expect(mocks.trashEmptyDirectories).toHaveBeenCalledWith((plugin as unknown as { app: unknown }).app, ['attachments']);
         expect(replace.mock.invocationCallOrder[0]).toBeLessThan(mocks.trashFile.mock.invocationCallOrder[0]!);
+    });
+
+    it('keeps the local image and skips directory cleanup when keepLocalCopy is enabled', async () => {
+        const plugin = createPlugin();
+        plugin.settings.keepLocalCopy = true;
+        const image = createImage('attachments/a.png');
+        mocks.images = [image];
+        mocks.upload.mockResolvedValue({ success: true, url: 'https://host/a.png' });
+        const replace = vi.fn(async () => undefined);
+        (plugin as unknown as { replaceReferenceInNote: typeof replace }).replaceReferenceInNote = replace;
+
+        await plugin.uploadEntireVault();
+
+        expect(replace).toHaveBeenCalledWith(image, 'https://host/a.png');
+        expect(mocks.trashFile).not.toHaveBeenCalled();
+        expect(mocks.trashEmptyDirectories).not.toHaveBeenCalled();
     });
 
     it('keeps images when upload or reference replacement fails', async () => {

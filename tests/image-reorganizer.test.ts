@@ -532,6 +532,7 @@ describe('图片资源整理命名', () => {
         );
 
         expect(result).toMatchObject({ moved: 0, skipped: 0, failed: 0 });
+        expect(result.movedParentPaths).toEqual(new Set());
         expect(harness.rename).not.toHaveBeenCalled();
         expect(harness.contents.get('notes/note.md')).toBe(
             '![封面](attachments/image-1.png)'
@@ -621,6 +622,7 @@ describe('图片资源整理命名', () => {
         const result = await reorganizer.reorganizeFolder('notes', 'markdown');
 
         expect(result).toMatchObject({ moved: 2, skipped: 0, failed: 0, notes: 2 });
+        expect(result.movedParentPaths).toEqual(new Set(['assets']));
         expect(harness.files.has('notes/attachments/image-0.png')).toBe(true);
         expect(harness.files.has('notes/attachments/image-1.png')).toBe(true);
     });

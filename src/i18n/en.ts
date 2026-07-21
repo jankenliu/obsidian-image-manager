@@ -78,6 +78,7 @@ export const en: Record<string, string> = {
     'notice.batchUploadProgress': 'Uploading: {done}/{total} - {current}',
     'notice.batchUploadDone': 'Batch upload complete: {success}/{total} succeeded.',
     'notice.autoReplaceRequiredForVaultUpload': 'Enable automatic reference replacement after upload before uploading all local images.',
+    'notice.vaultActionInProgress': 'A vault-wide image action is already running.',
     'notice.renameSuccess': 'Renamed "{old}" to "{new}", updated {notes} note(s).',
     'notice.renameFailed': 'Rename failed: {error}',
     'notice.reorganizeDone': 'Reorganized {note} note(s), moved or renamed {moved} image(s), skipped {skipped}, failed {failed}',

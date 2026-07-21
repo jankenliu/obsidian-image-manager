@@ -206,4 +206,19 @@ describe('Vault upload coordinator', () => {
         await firstRun;
         await secondRun;
     });
+
+    it('does not start vault reorganization while a vault upload is running', async () => {
+        const plugin = createPlugin();
+        mocks.images = [createImage('attachments/a.png')];
+        let completeUpload: ((result: { success: boolean; url: string }) => void) | undefined;
+        mocks.upload.mockImplementationOnce(() => new Promise((resolve) => { completeUpload = resolve; }));
+
+        const upload = plugin.uploadEntireVault();
+        await Promise.resolve();
+        await plugin.reorganizeEntireVault();
+
+        expect(mocks.notices).toContain('notice.vaultActionInProgress');
+        completeUpload?.({ success: true, url: 'https://host/a.png' });
+        await upload;
+    });
 });

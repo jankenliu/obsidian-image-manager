@@ -26,7 +26,7 @@ export default class ImageManagerPlugin extends Plugin {
     batchRename: BatchRename;
     private emptyFolderCleaner: EmptyFolderCleaner;
     private isReorganizing = false;
-    private isUploadingVault = false;
+    private activeVaultAction: 'reorganize' | 'upload' | null = null;
     async onload() {
         await this.loadSettings();
         setLocale(this.settings.locale);
@@ -657,10 +657,11 @@ export default class ImageManagerPlugin extends Plugin {
      */
     async reorganizeEntireVault() {
         if (this.isReorganizing) return;
+        if (!this.startVaultAction('reorganize')) return;
 
-        const reorganizer = new ImageReorganizer(this.app, this.settings, this.resolveImagePath.bind(this));
         this.isReorganizing = true;
         try {
+            const reorganizer = new ImageReorganizer(this.app, this.settings, this.resolveImagePath.bind(this));
             const result = await reorganizer.reorganizeFolderWithCleanupInfo(
                 '',
                 this.settings.reorganizeConvertFormat ? 'markdown' : undefined
@@ -678,6 +679,7 @@ export default class ImageManagerPlugin extends Plugin {
             new Notice(t('notice.reorganizeFailed', { error: e instanceof Error ? e.message : 'Unknown error' }));
         } finally {
             this.isReorganizing = false;
+            this.finishVaultAction('reorganize');
         }
     }
 
@@ -686,38 +688,37 @@ export default class ImageManagerPlugin extends Plugin {
      * The plugin-level guard also protects calls initiated by separate modal instances.
      */
     async uploadEntireVault() {
-        if (this.isUploadingVault) return;
-
-        if (!this.settings.reorganizeConvertFormat) {
-            new Notice(t('settings.hostingDisabledByFormat'));
-            return;
-        }
-
-        if (!this.settings.autoReplaceAfterUpload) {
-            new Notice(t('notice.autoReplaceRequiredForVaultUpload'));
-            return;
-        }
-
-        const hostingConfig = this.getDefaultHostingConfig();
-        if (!hostingConfig) {
-            new Notice(t('notice.noHostingConfig'));
-            return;
-        }
-
-        const scanner = new ImageScanner(this.app, this.settings.supportedExtensions);
-        const images = scanner.getAllImages();
-        if (images.length === 0) {
-            new Notice(t('notice.noImagesToUpload'));
-            return;
-        }
-
-        this.isUploadingVault = true;
-        let uploaded = 0;
-        let failed = 0;
-        let trashed = 0;
-        const affectedParentPaths: string[] = [];
+        if (!this.startVaultAction('upload')) return;
 
         try {
+            if (!this.settings.reorganizeConvertFormat) {
+                new Notice(t('settings.hostingDisabledByFormat'));
+                return;
+            }
+
+            if (!this.settings.autoReplaceAfterUpload) {
+                new Notice(t('notice.autoReplaceRequiredForVaultUpload'));
+                return;
+            }
+
+            const hostingConfig = this.getDefaultHostingConfig();
+            if (!hostingConfig) {
+                new Notice(t('notice.noHostingConfig'));
+                return;
+            }
+
+            const scanner = new ImageScanner(this.app, this.settings.supportedExtensions);
+            const images = scanner.getAllImages();
+            if (images.length === 0) {
+                new Notice(t('notice.noImagesToUpload'));
+                return;
+            }
+
+            let uploaded = 0;
+            let failed = 0;
+            let trashed = 0;
+            const affectedParentPaths: string[] = [];
+
             for (const image of images) {
                 try {
                     let data = await this.app.vault.readBinary(image);
@@ -758,8 +759,21 @@ export default class ImageManagerPlugin extends Plugin {
                 directories: String(cleanup.trashed.length),
             }));
         } finally {
-            this.isUploadingVault = false;
+            this.finishVaultAction('upload');
         }
+    }
+
+    private startVaultAction(action: 'reorganize' | 'upload'): boolean {
+        if (this.activeVaultAction) {
+            new Notice(t('notice.vaultActionInProgress'));
+            return false;
+        }
+        this.activeVaultAction = action;
+        return true;
+    }
+
+    private finishVaultAction(action: 'reorganize' | 'upload') {
+        if (this.activeVaultAction === action) this.activeVaultAction = null;
     }
 
     private async convertNoteToFormat(file: TFile, targetFormat: 'wiki' | 'markdown') {

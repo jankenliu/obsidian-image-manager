@@ -77,6 +77,7 @@ export const zh: Record<string, string> = {
     'notice.batchUploadProgress': '上传中：{done}/{total} - {current}',
     'notice.batchUploadDone': '批量上传完成：{success}/{total} 成功。',
     'notice.autoReplaceRequiredForVaultUpload': '未开启“上传后自动替换引用”配置，无法一键上传图床。',
+    'notice.vaultActionInProgress': '已有全库图片操作正在执行，请稍后再试。',
     'notice.renameSuccess': '已将 "{old}" 重命名为 "{new}"，更新了 {notes} 个笔记。',
     'notice.renameFailed': '重命名失败：{error}',
     'notice.reorganizeDone': '已整理 {note} 篇笔记，移动或重命名 {moved} 张图片，跳过 {skipped} 张，失败 {failed} 张',

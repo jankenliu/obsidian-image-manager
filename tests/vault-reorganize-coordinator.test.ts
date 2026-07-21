@@ -3,10 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
     reorganizeFolderWithCleanupInfo: vi.fn(),
     trashEmptyDirectories: vi.fn(),
+    notices: [] as string[],
 }));
 
 vi.mock('obsidian', () => ({
-    Notice: vi.fn(),
+    Notice: class {
+        constructor(message: string) { mocks.notices.push(message); }
+    },
     Plugin: class {
         app: unknown;
         constructor(app: unknown) {
@@ -59,6 +62,7 @@ function createPlugin() {
 describe('Vault reorganization coordinator', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mocks.notices = [];
     });
 
     it('reorganizes the entire vault and cleans the parents of moved images', async () => {
@@ -107,5 +111,26 @@ describe('Vault reorganization coordinator', () => {
         completeReorganization?.(completedResult);
         await firstRun;
         await secondRun;
+    });
+
+    it('does not start a vault upload while vault reorganization is running', async () => {
+        let completeReorganization: ((value: {
+            notes: number;
+            moved: number;
+            skipped: number;
+            failed: number;
+            movedParentPaths: string[];
+        }) => void) | undefined;
+        mocks.reorganizeFolderWithCleanupInfo.mockImplementationOnce(() => new Promise((resolve) => {
+            completeReorganization = resolve;
+        }));
+        const plugin = createPlugin();
+
+        const reorganization = plugin.reorganizeEntireVault();
+        await plugin.uploadEntireVault();
+
+        expect(mocks.notices).toContain('notice.vaultActionInProgress');
+        completeReorganization?.({ notes: 1, moved: 0, skipped: 0, failed: 0, movedParentPaths: [] });
+        await reorganization;
     });
 });

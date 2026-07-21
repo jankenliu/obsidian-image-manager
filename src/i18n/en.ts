@@ -145,7 +145,6 @@ export const en: Record<string, string> = {
     'modal.preview.refCount': '{total} reference(s) in {notes} note(s)',
     'modal.preview.scanningReferences': 'Scanning image references...',
     'modal.preview.referenceScanFailed': 'Failed to scan image references: {error}',
-    'modal.preview.toggleReferences': 'Expand or collapse reference details',
     'modal.preview.openReference': 'Open {path} at line {line}',
     'modal.preview.copyRef': 'Copy Reference',
     'modal.preview.insert': 'Insert into Editor',

@@ -80,6 +80,7 @@ abstract class UploaderBase {
 
 - `urlPrefix` 表示公共访问 URL 基础路径，可包含 bucket 或目录；缺少协议时补 `https://`，拼接时只清理边界斜杠。
 - 上传结果保留网络安全的编码 URL。生成 Markdown 引用时仅还原路径中的非 ASCII UTF-8 字符，空格、`#`、`?`、`%`、括号等仍保持百分号编码。
+- 上传后跨笔记回写时，仅替换解析后确实指向当前本地图片路径的引用；必须跳过 `http://`、`https://` 图床 URL，不能按 URL 末尾文件名匹配，避免覆盖其他笔记已有的图床链接。
 
 ### 自定义 (`custom-uploader.ts`)
 

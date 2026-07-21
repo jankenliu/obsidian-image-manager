@@ -563,8 +563,12 @@ export default class ImageManagerPlugin extends Plugin {
 
             for (let i = refs.length - 1; i >= 0; i--) {
                 const ref = refs[i]!;
-                const refName = ref.path.split('/').pop() ?? ref.path;
-                if (refName === imageName || ref.path === imagePath) {
+                // 仅回写指向同一张本地图片的引用，不能根据文件名匹配图床 URL。
+                if (ref.path.startsWith('http://') || ref.path.startsWith('https://')) continue;
+
+                const noteDir = mdFile.parent?.path ?? '';
+                const resolvedPath = this.resolveRefPath(noteDir, ref.path);
+                if (resolvedPath === imagePath) {
                     const newRef = this.buildUploadedReference(
                         imageName,
                         newUrl,

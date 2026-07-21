@@ -75,19 +75,7 @@ export class ImagePreviewModal extends Modal {
                 }),
             });
 
-            // Expandable details
-            const detailsToggle = refRow.createSpan({
-                cls: 'image-preview-details-toggle',
-                text: ' ▸',
-            });
-            const notesList = infoEl.createDiv({ cls: 'image-preview-notes image-preview-notes-hidden' });
-            let expanded = false;
-
-            detailsToggle.addEventListener('click', () => {
-                expanded = !expanded;
-                detailsToggle.setText(expanded ? ' ▾' : ' ▸');
-                notesList.toggleClass('image-preview-notes-hidden', !expanded);
-            });
+            const notesList = infoEl.createDiv({ cls: 'image-preview-notes' });
 
             for (const note of notes.slice(0, 10)) {
                 const noteRow = notesList.createDiv({ cls: 'image-preview-note-item' });

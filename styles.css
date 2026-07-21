@@ -82,6 +82,18 @@
     border-color: var(--interactive-accent);
 }
 
+.image-browser-vault-actions {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.image-browser-vault-actions button {
+    flex-shrink: 0;
+    font-size: 0.8em;
+}
+
 .image-browser-filter-status {
     margin-bottom: 12px;
     padding: 8px 12px;

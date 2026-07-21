@@ -125,3 +125,7 @@ reorganizeConvertFormat
 | `batch-rename.ts` | 重命名 + 引用同步 | 文件移动、格式转换 |
 | `uploaders/` | 图床上传 | 引用替换（main.ts 处理） |
 | `image-optimizer.ts` | 压缩、格式转换 | 文件保存（调用者处理） |
+
+## 图片浏览器全库操作
+
+图片浏览器的本地模式提供“**一键整理笔记**”和“**一键上传图床**”。Modal 只负责二次确认和运行期间禁用按钮；`main.ts` 的 `reorganizeEntireVault()` 与 `uploadEntireVault()` 负责业务编排、通知、引用更新和回收站清理。图床模式必须隐藏这两个入口。全库上传在显示确认框前检查 `autoReplaceAfterUpload`，未开启时提示用户并终止操作。

@@ -21,6 +21,7 @@ import {
     ImageBrowserScanState,
 } from './image-browser-scan-state';
 import { getOrphanBadgeLabel } from './image-browser-orphan-label';
+import { ImageBrowserVaultActionState } from './image-browser-vault-actions';
 
 type BrowserSource = 'local' | 'hosting';
 type BrowserSort = 'name' | 'size' | 'modified' | 'created';
@@ -51,6 +52,9 @@ export class ImageBrowserModal extends Modal {
     private hostingBtn: HTMLButtonElement | null = null;
     private gridViewBtn: HTMLButtonElement | null = null;
     private treeViewBtn: HTMLButtonElement | null = null;
+    private vaultActionsEl: HTMLDivElement | null = null;
+    private reorganizeVaultBtn: HTMLButtonElement | null = null;
+    private uploadVaultBtn: HTMLButtonElement | null = null;
     private source: BrowserSource = 'local';
     private view: BrowserView = 'grid';
     private readonly localExpandedPaths = new Set<string>();
@@ -59,6 +63,7 @@ export class ImageBrowserModal extends Modal {
     private readonly initializedHostingTrees = new Set<string>();
     private readonly orphanScanState = new ImageBrowserScanState();
     private readonly batchSelection = new ImageBrowserBatchSelection();
+    private readonly vaultActionState = new ImageBrowserVaultActionState();
     private showLocalOrphansOnly = false;
     private showHostedOrphansOnly = false;
     private localOrphanError = '';
@@ -135,6 +140,8 @@ export class ImageBrowserModal extends Modal {
         });
         this.orphanBtn.addEventListener('click', () => void this.toggleOrphanFilter());
 
+        this.createVaultActions(controls);
+
         const viewSwitch = controls.createDiv({ cls: 'image-browser-view-switch' });
         this.gridViewBtn = viewSwitch.createEl('button', {
             cls: 'image-browser-view-btn is-active',
@@ -206,6 +213,19 @@ export class ImageBrowserModal extends Modal {
         this.deleteSelectedBtn.addEventListener('click', () => this.confirmBatchDelete());
     }
 
+    private createVaultActions(containerEl: HTMLElement) {
+        this.vaultActionsEl = containerEl.createDiv({ cls: 'image-browser-vault-actions' });
+        this.reorganizeVaultBtn = this.vaultActionsEl.createEl('button', {
+            text: t('modal.imageBrowser.reorganizeVault'),
+        });
+        this.uploadVaultBtn = this.vaultActionsEl.createEl('button', {
+            text: t('modal.imageBrowser.uploadVault'),
+        });
+        this.reorganizeVaultBtn.addEventListener('click', () => this.confirmReorganizeVault());
+        this.uploadVaultBtn.addEventListener('click', () => this.confirmUploadVault());
+        this.updateVaultActionButtons();
+    }
+
     private getEnabledHostingConfigs(): ImageHostingConfig[] {
         return this.plugin.settings.hostingConfigs.filter((config) => config.enabled);
     }
@@ -217,6 +237,7 @@ export class ImageBrowserModal extends Modal {
         this.localBtn?.toggleClass('is-active', source === 'local');
         this.hostingBtn?.toggleClass('is-active', source === 'hosting');
         this.hostingSelect?.toggleClass('image-browser-hidden', source !== 'hosting');
+        this.updateVaultActionButtons();
         this.updateOrphanButton();
         this.sortSelect?.querySelector<HTMLOptionElement>('option[value="created"]')
             ?.toggleClass('image-browser-hidden', source === 'hosting');
@@ -234,6 +255,48 @@ export class ImageBrowserModal extends Modal {
             if (this.sortSelect?.value === 'created') this.sortSelect.value = 'name';
             void this.loadHostedImages();
         }
+    }
+
+    private confirmReorganizeVault() {
+        if (this.vaultActionState.isRunning()) return;
+        new ConfirmDialog(this.app, {
+            title: t('modal.imageBrowser.reorganizeVault'),
+            message: t('modal.imageBrowser.reorganizeVaultMessage'),
+            onConfirm: () => this.runVaultAction(() => this.plugin.reorganizeEntireVault()),
+        }).open();
+    }
+
+    private confirmUploadVault() {
+        if (this.vaultActionState.isRunning()) return;
+        if (!this.plugin.settings.autoReplaceAfterUpload) {
+            new Notice(t('notice.autoReplaceRequiredForVaultUpload'));
+            return;
+        }
+        new ConfirmDialog(this.app, {
+            title: t('modal.imageBrowser.uploadVault'),
+            message: t('modal.imageBrowser.uploadVaultMessage'),
+            onConfirm: () => this.runVaultAction(() => this.plugin.uploadEntireVault()),
+        }).open();
+    }
+
+    private async runVaultAction(action: () => Promise<void>) {
+        if (!this.vaultActionState.start()) return;
+        this.updateVaultActionButtons();
+        try {
+            await action();
+            this.loadLocalImages();
+        } finally {
+            this.vaultActionState.finish();
+            this.updateVaultActionButtons();
+        }
+    }
+
+    private updateVaultActionButtons() {
+        const visible = this.vaultActionState.isVisible(this.source);
+        this.vaultActionsEl?.toggleClass('image-browser-hidden', !visible);
+        const disabled = this.vaultActionState.isRunning();
+        if (this.reorganizeVaultBtn) this.reorganizeVaultBtn.disabled = disabled;
+        if (this.uploadVaultBtn) this.uploadVaultBtn.disabled = disabled;
     }
 
     private switchView(view: BrowserView) {

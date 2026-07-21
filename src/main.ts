@@ -16,6 +16,7 @@ import { setLocale, t } from './i18n';
 import { getDateTemplateVars, getFileNameWithoutExt, encodePathSegments } from './utils/path-utils';
 import { makePublicUrlReadable } from './utils/public-url';
 import { EmptyFolderCleaner } from './utils/empty-folder-cleaner';
+import { trashEmptyDirectories } from './utils/empty-directory-cleanup';
 import { renderImageNameTemplate, sanitizeImageFileName } from './utils/image-name-template';
 
 export default class ImageManagerPlugin extends Plugin {
@@ -634,6 +635,31 @@ export default class ImageManagerPlugin extends Plugin {
         this.isReorganizing = true;
         try {
             const result = await reorganizer.reorganizeFolder(folderPath, this.settings.reorganizeConvertFormat ? 'markdown' : undefined);
+            new Notice(
+                t('notice.reorganizeDone', {
+                    note: String(result.notes),
+                    moved: String(result.moved),
+                    skipped: String(result.skipped),
+                    failed: String(result.failed),
+                })
+            );
+        } catch (e) {
+            new Notice(t('notice.reorganizeFailed', { error: e instanceof Error ? e.message : 'Unknown error' }));
+        } finally {
+            this.isReorganizing = false;
+        }
+    }
+
+    /** Reorganize image references across every Markdown note in the vault. */
+    async reorganizeEntireVault() {
+        const reorganizer = new ImageReorganizer(this.app, this.settings, this.resolveImagePath.bind(this));
+        this.isReorganizing = true;
+        try {
+            const result = await reorganizer.reorganizeFolderWithCleanupInfo(
+                '',
+                this.settings.reorganizeConvertFormat ? 'markdown' : undefined
+            );
+            await trashEmptyDirectories(this.app, result.movedParentPaths);
             new Notice(
                 t('notice.reorganizeDone', {
                     note: String(result.notes),

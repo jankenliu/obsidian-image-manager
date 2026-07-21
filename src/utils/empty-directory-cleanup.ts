@@ -9,7 +9,7 @@ export interface EmptyDirectoryCleanupResult {
 /** Move empty affected directories and their empty ancestors to the configured trash destination. */
 export async function trashEmptyDirectories(
     app: App,
-    affectedParentPaths: string[]
+    affectedParentPaths: readonly string[]
 ): Promise<EmptyDirectoryCleanupResult> {
     const folders = new Map<string, TFolder>();
 

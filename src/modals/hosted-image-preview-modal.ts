@@ -114,25 +114,7 @@ export class HostedImagePreviewModal extends Modal {
                 notes: String(notes.length),
             }),
         });
-        const detailsToggle = refRow.createEl('button', {
-            cls: 'image-preview-details-toggle',
-            text: ' ▸',
-            attr: {
-                type: 'button',
-                'aria-label': t('modal.preview.toggleReferences'),
-                'aria-expanded': 'false',
-            },
-        });
-        const notesList = containerEl.createDiv({
-            cls: 'image-preview-notes image-preview-notes-hidden',
-        });
-        let expanded = false;
-        detailsToggle.addEventListener('click', () => {
-            expanded = !expanded;
-            detailsToggle.setText(expanded ? ' ▾' : ' ▸');
-            detailsToggle.setAttribute('aria-expanded', String(expanded));
-            notesList.toggleClass('image-preview-notes-hidden', !expanded);
-        });
+        const notesList = containerEl.createDiv({ cls: 'image-preview-notes' });
 
         for (const note of notes) {
             const noteRow = notesList.createDiv({ cls: 'image-preview-note-item' });

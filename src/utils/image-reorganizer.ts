@@ -16,6 +16,7 @@ export interface ReorganizeResult {
     moved: number;
     skipped: number;
     failed: number;
+    movedParentPaths: Set<string>;
 }
 
 interface PlannedImage {
@@ -35,6 +36,7 @@ interface ReorganizeContext {
     moved: number;
     skipped: number;
     failed: number;
+    movedParentPaths: Set<string>;
 }
 
 interface PlannedReference {
@@ -84,6 +86,7 @@ export class ImageReorganizer {
             moved: result.moved,
             skipped: result.skipped,
             failed: result.failed,
+            movedParentPaths: result.movedParentPaths,
         };
     }
 
@@ -107,6 +110,7 @@ export class ImageReorganizer {
             moved: 0,
             skipped: 0,
             failed: 0,
+            movedParentPaths: new Set<string>(),
         };
     }
 
@@ -167,6 +171,7 @@ export class ImageReorganizer {
             moved: context.moved,
             skipped: context.skipped,
             failed: context.failed,
+            movedParentPaths: context.movedParentPaths,
             notes: touchedNotes.size,
         };
     }
@@ -299,9 +304,13 @@ export class ImageReorganizer {
                 );
                 try {
                     await this.ensureDirectory(targetDir);
+                    const sourceParentPath = image.file.parent?.path;
                     await this.app.vault.rename(image.file, image.targetPath);
                     image.finalPath = image.targetPath;
                     context.moved++;
+                    if (sourceParentPath) {
+                        context.movedParentPaths.add(sourceParentPath);
+                    }
                     break;
                 } catch {
                     if (await this.isStoredTargetOccupied(

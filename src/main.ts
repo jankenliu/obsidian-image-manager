@@ -16,6 +16,7 @@ import { setLocale, t } from './i18n';
 import { getDateTemplateVars, getFileNameWithoutExt, encodePathSegments } from './utils/path-utils';
 import { makePublicUrlReadable } from './utils/public-url';
 import { EmptyFolderCleaner } from './utils/empty-folder-cleaner';
+import { renderImageNameTemplate, sanitizeImageFileName } from './utils/image-name-template';
 
 export default class ImageManagerPlugin extends Plugin {
     settings: ImageManagerSettings;
@@ -691,7 +692,7 @@ export default class ImageManagerPlugin extends Plugin {
 
             if (this.settings.promptImageName) {
                 new ImageNamePromptModal(this.app, defaultName, (userNamed) => {
-                    const safeName = this.sanitizeFileName(userNamed, ext);
+                    const safeName = sanitizeImageFileName(userNamed, ext);
                     void imgFile.arrayBuffer().then((buffer) => {
                         void this.savePastedImage(new Uint8Array(buffer), imgFile.type, safeName, editor, currentFile);
                     }).catch((e) => {
@@ -709,40 +710,11 @@ export default class ImageManagerPlugin extends Plugin {
     }
 
     private generateFileName(ext: string): string {
-        const now = new Date();
-        const vars: Record<string, string> = {
-            date: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
-            time: `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`,
-            timestamp: String(now.getTime()),
-            year: String(now.getFullYear()),
-            month: String(now.getMonth() + 1).padStart(2, '0'),
-            day: String(now.getDate()).padStart(2, '0'),
-            counter: String(this.pasteCounter++),
-        };
-
-        let template = this.settings.imageNamingTemplate || 'image-{timestamp}';
-        for (const [key, value] of Object.entries(vars)) {
-            template = template.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
-        }
-
-        return this.sanitizeFileName(template, ext);
-    }
-
-    private sanitizeFileName(name: string, ext: string): string {
-        // Remove extension if user included it
-        const extPattern = new RegExp(`\\.${ext}$`, 'i');
-        let base = name.replace(extPattern, '');
-
-        // Replace spaces and unsafe characters with hyphens
-        base = base
-            .replace(/\s+/g, '-')
-            .replace(/[/\\:*?"<>|]/g, '')
-            .replace(/-{2,}/g, '-')
-            .replace(/^-+|-+$/g, '');
-
-        if (!base) base = 'image';
-
-        return `${base}.${ext}`;
+        return renderImageNameTemplate(
+            this.settings.imageNamingTemplate,
+            ext,
+            this.pasteCounter++
+        );
     }
 
     private async ensureUniquePath(dir: string, filename: string): Promise<string> {

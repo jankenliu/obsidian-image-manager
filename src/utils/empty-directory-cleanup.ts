@@ -34,7 +34,7 @@ export async function trashEmptyDirectories(
         if (!folder.path || folder.children.length > 0) continue;
 
         try {
-            await (app.fileManager.trashFile as (file: TFolder, permanently: boolean) => Promise<void>)(folder, true);
+            await app.fileManager.trashFile(folder);
             result.trashed.push(folder.path);
         } catch {
             result.failed++;

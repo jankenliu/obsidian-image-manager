@@ -53,9 +53,9 @@ describe('Empty directory cleanup', () => {
         const result = await trashEmptyDirectories(app, ['attachments/2026']);
 
         expect(result).toEqual({ trashed: ['attachments/2026', 'attachments'], failed: 0 });
-        expect(trashFile).toHaveBeenNthCalledWith(1, nested, true);
-        expect(trashFile).toHaveBeenNthCalledWith(2, attachments, true);
-        expect(trashFile).not.toHaveBeenCalledWith(root, true);
+        expect(trashFile).toHaveBeenNthCalledWith(1, nested);
+        expect(trashFile).toHaveBeenNthCalledWith(2, attachments);
+        expect(trashFile).not.toHaveBeenCalledWith(root);
     });
 
     it('leaves directories that contain files or child items untouched', async () => {
@@ -84,7 +84,7 @@ describe('Empty directory cleanup', () => {
         const result = await trashEmptyDirectories(app, ['failing', 'successful']);
 
         expect(result).toEqual({ trashed: ['successful'], failed: 1 });
-        expect(trashFile).toHaveBeenCalledWith(failing, true);
-        expect(trashFile).toHaveBeenCalledWith(successful, true);
+        expect(trashFile).toHaveBeenCalledWith(failing);
+        expect(trashFile).toHaveBeenCalledWith(successful);
     });
 });

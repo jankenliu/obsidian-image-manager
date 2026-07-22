@@ -13,7 +13,7 @@ import { ImageReorganizer } from './utils/image-reorganizer';
 import { createUploader } from './uploaders/uploader-factory';
 import { UploadQueue } from './uploaders/upload-queue';
 import { setLocale, t } from './i18n';
-import { getDateTemplateVars, getFileNameWithoutExt, encodePathSegments } from './utils/path-utils';
+import { getDateTemplateVars, getFileNameWithoutExt, encodePathSegments, decodePathSegments } from './utils/path-utils';
 import { makePublicUrlReadable } from './utils/public-url';
 import { EmptyFolderCleaner } from './utils/empty-folder-cleaner';
 import { trashEmptyDirectories } from './utils/empty-directory-cleanup';
@@ -504,7 +504,7 @@ export default class ImageManagerPlugin extends Plugin {
     }
 
     private resolveRefPath(noteDir: string, refPath: string): string | null {
-        const decoded = refPath.replace(/%20/g, ' ');
+        const decoded = decodePathSegments(refPath);
         // Absolute vault path (starts with /)
         if (decoded.startsWith('/')) {
             return normalizePath(decoded.substring(1));

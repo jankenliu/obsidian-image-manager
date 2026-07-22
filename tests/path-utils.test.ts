@@ -59,4 +59,10 @@ describe('path utilities', () => {
             '目录/my image%20#.png/bad%name'
         );
     });
+
+    it('decodes encoded parentheses in local Markdown paths', () => {
+        expect(decodePathSegments('括号%28笔记%29/20260722_4.png')).toBe(
+            '括号(笔记)/20260722_4.png'
+        );
+    });
 });

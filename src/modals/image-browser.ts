@@ -93,6 +93,7 @@ export class ImageBrowserModal extends Modal {
 
         const header = contentEl.createDiv({ cls: 'image-browser-header' });
         header.createEl('h2', { text: t('modal.imageBrowser.title'), cls: 'image-browser-title' });
+        this.createVaultActions(header);
         const sourceSwitch = header.createDiv({ cls: 'image-browser-source-switch' });
         this.localBtn = sourceSwitch.createEl('button', {
             cls: 'image-browser-source-btn is-active',
@@ -104,8 +105,6 @@ export class ImageBrowserModal extends Modal {
         });
         this.localBtn.addEventListener('click', () => this.switchSource('local'));
         this.hostingBtn.addEventListener('click', () => this.switchSource('hosting'));
-
-        this.createVaultActions(contentEl);
 
         const controls = contentEl.createDiv({ cls: 'image-browser-controls' });
         this.searchInput = controls.createEl('input', {

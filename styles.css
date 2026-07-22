@@ -87,7 +87,7 @@
     align-items: center;
     flex-wrap: wrap;
     gap: 8px;
-    margin-bottom: 8px;
+    margin: 0;
 }
 
 .image-browser-vault-actions button {

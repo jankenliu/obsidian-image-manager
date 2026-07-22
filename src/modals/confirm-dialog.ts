@@ -6,6 +6,8 @@ export interface ConfirmDialogOptions {
     message: string;
     confirmText?: string;
     cancelText?: string;
+    processingText?: string;
+    lockWhileConfirming?: boolean;
     onConfirm: () => void | Promise<void>;
     onCancel?: () => void;
 }
@@ -13,6 +15,9 @@ export interface ConfirmDialogOptions {
 export class ConfirmDialog extends Modal {
     private options: ConfirmDialogOptions;
     private keyHandler: (e: KeyboardEvent) => void;
+    private processing = false;
+    private confirmBtn: HTMLButtonElement | null = null;
+    private cancelBtn: HTMLButtonElement | null = null;
 
     constructor(app: App, options: ConfirmDialogOptions) {
         super(app);
@@ -40,19 +45,19 @@ export class ConfirmDialog extends Modal {
 
         const buttonContainer = contentEl.createDiv({ cls: 'confirm-dialog-buttons' });
 
-        const cancelBtn = buttonContainer.createEl('button', {
+        this.cancelBtn = buttonContainer.createEl('button', {
             text: this.options.cancelText ?? t('modal.confirm.cancel'),
         });
-        cancelBtn.addEventListener('click', () => {
+        this.cancelBtn.addEventListener('click', () => {
             this.options.onCancel?.();
             this.close();
         });
 
-        const confirmBtn = buttonContainer.createEl('button', {
+        this.confirmBtn = buttonContainer.createEl('button', {
             text: this.options.confirmText ?? t('modal.confirm.ok'),
             cls: 'mod-cta',
         });
-        confirmBtn.addEventListener('click', () => void this.handleConfirm());
+        this.confirmBtn.addEventListener('click', () => void this.handleConfirm());
 
         activeDocument.addEventListener('keydown', this.keyHandler);
     }
@@ -64,7 +69,29 @@ export class ConfirmDialog extends Modal {
     }
 
     private async handleConfirm() {
-        await this.options.onConfirm();
-        this.close();
+        if (this.processing) return;
+        this.processing = true;
+        if (this.options.lockWhileConfirming) {
+            if (this.confirmBtn) {
+                this.confirmBtn.disabled = true;
+                this.confirmBtn.setText(this.options.processingText ?? t('modal.confirm.processing'));
+            }
+            this.cancelBtn?.addClass('confirm-dialog-hidden');
+        }
+        try {
+            await this.options.onConfirm();
+            this.close();
+        } catch (error) {
+            if (this.options.lockWhileConfirming) {
+                if (this.confirmBtn) {
+                    this.confirmBtn.disabled = false;
+                    this.confirmBtn.setText(this.options.confirmText ?? t('modal.confirm.ok'));
+                }
+                this.cancelBtn?.removeClass('confirm-dialog-hidden');
+            }
+            throw error;
+        } finally {
+            this.processing = false;
+        }
     }
 }

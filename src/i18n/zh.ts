@@ -171,6 +171,7 @@ export const zh: Record<string, string> = {
     // 确认对话框
     'modal.confirm.ok': '确认',
     'modal.confirm.cancel': '取消',
+    'modal.confirm.processing': '处理中',
 
     // 孤立图片
     'modal.orphan.title': '孤立图片',

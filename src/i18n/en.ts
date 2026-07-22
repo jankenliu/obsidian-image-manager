@@ -172,6 +172,7 @@ export const en: Record<string, string> = {
     // Confirm Dialog
     'modal.confirm.ok': 'Confirm',
     'modal.confirm.cancel': 'Cancel',
+    'modal.confirm.processing': 'Processing',
 
     // Orphan Images Modal
     'modal.orphan.title': 'Orphan Images',

@@ -38,6 +38,10 @@
     display: none;
 }
 
+.confirm-dialog-hidden {
+    display: none;
+}
+
 .image-browser-controls {
     display: flex;
     align-items: center;

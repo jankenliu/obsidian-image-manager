@@ -261,6 +261,7 @@ export class ImageBrowserModal extends Modal {
         new ConfirmDialog(this.app, {
             title: t('modal.imageBrowser.reorganizeVault'),
             message: t('modal.imageBrowser.reorganizeVaultMessage'),
+            lockWhileConfirming: true,
             onConfirm: () => this.runVaultAction(() => this.plugin.reorganizeEntireVault()),
         }).open();
     }
@@ -274,6 +275,7 @@ export class ImageBrowserModal extends Modal {
         new ConfirmDialog(this.app, {
             title: t('modal.imageBrowser.uploadVault'),
             message: t('modal.imageBrowser.uploadVaultMessage'),
+            lockWhileConfirming: true,
             onConfirm: () => this.runVaultAction(() => this.plugin.uploadEntireVault()),
         }).open();
     }

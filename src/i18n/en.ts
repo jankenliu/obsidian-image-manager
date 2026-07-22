@@ -152,6 +152,8 @@ export const en: Record<string, string> = {
     'modal.preview.scanningReferences': 'Scanning image references...',
     'modal.preview.referenceScanFailed': 'Failed to scan image references: {error}',
     'modal.preview.openReference': 'Open {path} at line {line}',
+    'modal.preview.previousImage': 'Previous image',
+    'modal.preview.nextImage': 'Next image',
     'modal.preview.copyRef': 'Copy Reference',
     'modal.preview.insert': 'Insert into Editor',
     'modal.preview.upload': 'Upload to Hosting',

@@ -1,4 +1,4 @@
-import { App, Modal, Notice, TFile, SuggestModal, MarkdownView } from 'obsidian';
+import { App, Modal, Notice, TFile, SuggestModal, MarkdownView, setIcon } from 'obsidian';
 import type ImageManagerPlugin from '../main';
 import type { ImageHostingConfig } from '../types';
 import { OrphanFinder } from '../utils/orphan-finder';
@@ -50,10 +50,13 @@ export class ImagePreviewModal extends Modal {
         activeDocument.addEventListener('keydown', this.keyHandler);
 
         // Image preview
-        contentEl.createEl('img', {
+        const imageContainer = contentEl.createDiv({ cls: 'image-preview-image-container' });
+        this.createNavigationButton(imageContainer, -1);
+        imageContainer.createEl('img', {
             cls: 'image-preview-img',
             attr: { src: this.app.vault.getResourcePath(this.file) },
         });
+        this.createNavigationButton(imageContainer, 1);
 
         // File info section
         const infoEl = contentEl.createDiv({ cls: 'image-preview-info' });
@@ -170,6 +173,21 @@ export class ImagePreviewModal extends Modal {
         if (!this.onNavigate) return;
         if (!this.onNavigate(direction)) return;
         this.close();
+    }
+
+    private createNavigationButton(containerEl: HTMLElement, direction: -1 | 1) {
+        const button = containerEl.createEl('button', {
+            cls: 'image-preview-navigation-button',
+            attr: {
+                type: 'button',
+                'aria-label': t(direction === -1
+                    ? 'modal.preview.previousImage'
+                    : 'modal.preview.nextImage'),
+            },
+        });
+        button.disabled = !this.onNavigate;
+        setIcon(button, direction === -1 ? 'chevron-left' : 'chevron-right');
+        button.addEventListener('click', () => this.navigate(direction));
     }
 
     private buildReference(): string {

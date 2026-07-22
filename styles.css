@@ -461,6 +461,20 @@
     margin: 0 auto;
 }
 
+.image-preview-image-container {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.image-preview-navigation-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+}
+
 .image-preview-info {
     display: flex;
     flex-direction: column;

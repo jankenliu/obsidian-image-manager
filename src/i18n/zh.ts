@@ -151,6 +151,8 @@ export const zh: Record<string, string> = {
     'modal.preview.scanningReferences': '正在扫描图片引用...',
     'modal.preview.referenceScanFailed': '扫描图片引用失败：{error}',
     'modal.preview.openReference': '打开 {path} 第 {line} 行',
+    'modal.preview.previousImage': '上一张图片',
+    'modal.preview.nextImage': '下一张图片',
     'modal.preview.copyRef': '复制引用',
     'modal.preview.insert': '插入编辑器',
     'modal.preview.upload': '上传到图床',

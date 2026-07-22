@@ -83,10 +83,11 @@
 }
 
 .image-browser-vault-actions {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 8px;
+    margin-bottom: 8px;
 }
 
 .image-browser-vault-actions button {

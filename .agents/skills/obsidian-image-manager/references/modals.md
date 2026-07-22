@@ -47,7 +47,13 @@
 - 1.0.7 修复：统计所有引用而非仅去重笔记数
 - 显示格式：`5 reference(s) in 1 note(s)`
 
-## 3. OrphanImagesModal (`orphan-images.ts`)
+## 3. HostedImagePreviewModal (`hosted-image-preview-modal.ts`)
+
+**功能**：预览图床图片，并查看其在笔记中的引用。
+
+**键盘导航**：`↑` / `←` 切换上一张，`↓` / `→` 切换下一张；顺序跟随图片浏览器图床模式当前的筛选和排序结果。到达首尾时保持当前预览。处理中文输入法组合状态时不触发导航。
+
+## 4. OrphanImagesModal (`orphan-images.ts`)
 
 **功能**：检测并管理孤立图片
 
@@ -59,7 +65,7 @@
 
 **依赖**：`OrphanFinder`
 
-## 4. RenameImageModal (`rename-image.ts`)
+## 5. RenameImageModal (`rename-image.ts`)
 
 **功能**：重命名图片文件
 
@@ -69,7 +75,7 @@
 - Enter 确认，Escape 取消
 - `isComposing` 检查（IME 兼容）
 
-## 5. HostingConfigModal (`hosting-config.ts`)
+## 6. HostingConfigModal (`hosting-config.ts`)
 
 **功能**：图床配置表单
 
@@ -85,7 +91,7 @@
 - 测试连接按钮
 - 保存/取消
 
-## 6. ConfirmDialog (`confirm-dialog.ts`)
+## 7. ConfirmDialog (`confirm-dialog.ts`)
 
 **功能**：通用确认对话框
 
@@ -105,7 +111,7 @@ interface ConfirmDialogOptions {
 - Enter 确认，Escape 取消
 - `isComposing` 检查（IME 兼容）
 
-## 7. ImageNamePromptModal (`image-name-prompt.ts`)
+## 8. ImageNamePromptModal (`image-name-prompt.ts`)
 
 **功能**：粘贴/拖放时的图片命名输入
 

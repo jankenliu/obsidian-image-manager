@@ -832,8 +832,29 @@ export class ImageBrowserModal extends Modal {
             supportsDeletion && config
                 ? () => this.deleteHostedImage(image, config)
                 : undefined,
-            this
+            this,
+            (direction) => this.openAdjacentHostedImage(
+                image,
+                direction,
+                config,
+                supportsDeletion
+            )
         ).open();
+    }
+
+    private openAdjacentHostedImage(
+        image: HostedImage,
+        direction: -1 | 1,
+        config: ImageHostingConfig | null,
+        supportsDeletion: boolean
+    ): boolean {
+        const currentIndex = this.filteredHostedImages.findIndex(
+            (item) => item.key === image.key
+        );
+        const nextImage = this.filteredHostedImages[currentIndex + direction];
+        if (!nextImage) return false;
+        this.openHostedImage(nextImage, config, supportsDeletion);
+        return true;
     }
 
     private getSelectedHostingConfig(): ImageHostingConfig | null {

@@ -311,7 +311,8 @@
 }
 
 .image-browser-tree {
-    max-height: 60vh;
+    height: 520px;
+    max-height: 520px;
     overflow-y: auto;
     padding: 4px;
     border: 1px solid var(--background-modifier-border);

@@ -705,8 +705,17 @@ export class ImageBrowserModal extends Modal {
             this.plugin,
             file,
             this,
-            (deletedFile) => this.handleLocalImageDeleted(deletedFile)
+            (deletedFile) => this.handleLocalImageDeleted(deletedFile),
+            (direction) => this.openAdjacentLocalImage(file, direction)
         ).open();
+    }
+
+    private openAdjacentLocalImage(file: TFile, direction: -1 | 1) {
+        const currentIndex = this.filteredImages.findIndex((image) => image.path === file.path);
+        const nextFile = this.filteredImages[currentIndex + direction];
+        if (!nextFile) return false;
+        this.openLocalImage(nextFile);
+        return true;
     }
 
     private handleLocalImageDeleted(file: TFile) {

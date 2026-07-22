@@ -14,24 +14,40 @@ export class ImagePreviewModal extends Modal {
     private plugin: ImageManagerPlugin;
     private browserModal?: Modal;
     private onDelete?: (file: TFile) => void;
+    private onNavigate?: (direction: -1 | 1) => boolean;
+    private keyHandler: (event: KeyboardEvent) => void;
 
     constructor(
         app: App,
         plugin: ImageManagerPlugin,
         file: TFile,
         browserModal?: Modal,
-        onDelete?: (file: TFile) => void
+        onDelete?: (file: TFile) => void,
+        onNavigate?: (direction: -1 | 1) => boolean
     ) {
         super(app);
         this.plugin = plugin;
         this.file = file;
         this.browserModal = browserModal;
         this.onDelete = onDelete;
+        this.onNavigate = onNavigate;
+        this.keyHandler = (event: KeyboardEvent) => {
+            if (event.isComposing) return;
+            const direction = event.key === 'ArrowUp' || event.key === 'ArrowLeft'
+                ? -1
+                : event.key === 'ArrowDown' || event.key === 'ArrowRight'
+                    ? 1
+                    : null;
+            if (direction === null) return;
+            event.preventDefault();
+            this.navigate(direction);
+        };
     }
 
     async onOpen() {
         const { contentEl } = this;
         contentEl.addClass('image-preview');
+        activeDocument.addEventListener('keydown', this.keyHandler);
 
         // Image preview
         contentEl.createEl('img', {
@@ -147,6 +163,13 @@ export class ImagePreviewModal extends Modal {
 
     onClose() {
         this.contentEl.empty();
+        activeDocument.removeEventListener('keydown', this.keyHandler);
+    }
+
+    private navigate(direction: -1 | 1) {
+        if (!this.onNavigate) return;
+        if (!this.onNavigate(direction)) return;
+        this.close();
     }
 
     private buildReference(): string {

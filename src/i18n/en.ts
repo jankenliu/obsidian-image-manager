@@ -120,7 +120,7 @@ export const en: Record<string, string> = {
     'modal.imageBrowser.unknownError': 'Unknown error',
     'modal.imageBrowser.orphanScanFailed': 'Failed to scan orphan images: {error}',
     'modal.imageBrowser.reorganizeVault': 'Organize notes',
-    'modal.imageBrowser.reorganizeVaultMessage': 'Warning: This operation will organize local images in all notes in the current workspace.',
+    'modal.imageBrowser.reorganizeVaultMessage': 'Warning: This operation will organize local images in all notes in the current workspace using the configured path and naming templates. Images that do not match these rules will be moved and their references updated.',
     'modal.imageBrowser.uploadVault': 'Upload to image hosting',
     'modal.imageBrowser.uploadVaultMessage': 'Warning: This operation will upload all local images to image hosting and replace note references with hosted image links.',
     'modal.imageBrowser.gridView': 'Grid',

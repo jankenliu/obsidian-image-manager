@@ -119,7 +119,7 @@ export const zh: Record<string, string> = {
     'modal.imageBrowser.unknownError': '未知错误',
     'modal.imageBrowser.orphanScanFailed': '扫描孤立图片失败：{error}',
     'modal.imageBrowser.reorganizeVault': '一键整理笔记',
-    'modal.imageBrowser.reorganizeVaultMessage': '请注意！该操作会整理当前工作空间中所有的笔记本地图片。',
+    'modal.imageBrowser.reorganizeVaultMessage': '请注意！该操作会整理当前工作空间中所有的笔记本地图片。会按照配置的路径模板+命名模板进行整理，会将现有的未满足该规则的图片进行移动，并替换引用。',
     'modal.imageBrowser.uploadVault': '一键上传图床',
     'modal.imageBrowser.uploadVaultMessage': '请注意！该操作会上传所有的本地图片到图床，并替换笔记为图床的链接引用。',
     'modal.imageBrowser.gridView': '网格',

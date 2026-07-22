@@ -105,6 +105,8 @@ export class ImageBrowserModal extends Modal {
         this.localBtn.addEventListener('click', () => this.switchSource('local'));
         this.hostingBtn.addEventListener('click', () => this.switchSource('hosting'));
 
+        this.createVaultActions(contentEl);
+
         const controls = contentEl.createDiv({ cls: 'image-browser-controls' });
         this.searchInput = controls.createEl('input', {
             cls: 'image-browser-search',
@@ -139,8 +141,6 @@ export class ImageBrowserModal extends Modal {
             text: t('modal.imageBrowser.orphanFilter'),
         });
         this.orphanBtn.addEventListener('click', () => void this.toggleOrphanFilter());
-
-        this.createVaultActions(controls);
 
         const viewSwitch = controls.createDiv({ cls: 'image-browser-view-switch' });
         this.gridViewBtn = viewSwitch.createEl('button', {

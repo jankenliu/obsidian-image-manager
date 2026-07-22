@@ -172,7 +172,8 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 12px;
-    max-height: 60vh;
+    height: 520px;
+    max-height: 520px;
     overflow-y: auto;
     padding: 4px;
 }
